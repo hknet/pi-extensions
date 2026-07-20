@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5 - 2026-07-20
+
+### Changed
+
+- Correct and clarify the current Pi compatibility and autocomplete documentation.
+
 ## 0.1.4 - 2026-07-20
 
 ### Changed

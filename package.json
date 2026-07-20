@@ -1,6 +1,6 @@
 {
   "name": "pi-extensions",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Pi agent extensions: advisor, thinking command, timestamps, and per-project model preferences",
   "type": "module",
   "private": false,

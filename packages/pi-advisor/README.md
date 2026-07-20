@@ -1,6 +1,6 @@
 # pi-advisor
 
-A [pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) extension that offers a
+A [pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) extension for pi `>=0.80.10` that offers a
 parameterless `advisor` tool — inspired by Claude Code's advisor, but expanded with additional
 nudges and a manual review procedure. The regular model calls `advisor` to get a second opinion
 from an explicitly configured **stronger reviewer model** that sees the *entire* conversation transcript. Beyond the
@@ -100,7 +100,7 @@ are selectable.
 | `/advisor status` | Show the resolved configuration |
 | `/advise [show\|pipe\|steer]` | Run a one-off review now; default is `pipe` when idle and `steer` while the agent is running |
 
-Autocomplete completes `/adviso...` to `/advisor` without Pi's trailing-space insertion, then offers advisor configuration choices. `/advise` keeps Pi's standard completion behavior.
+Autocomplete completes `/adviso...` to `/advisor` without Pi's trailing-space insertion. A completed reviewer model opens that model's supported thinking-level picker on the next Tab. `/advisor on-done` and `/advisor when-stuck` open their value pickers directly. `/advise` keeps Pi's standard completion behavior.
 
 ### `/advise` modes
 
@@ -170,5 +170,4 @@ tool's `promptGuidelines`. Two opt-in deterministic triggers, configurable per p
   also layers a `ctx.ui.addAutocompleteProvider()` on `session_start` so `/advisor ...` and
   `/advise ...` completions replace the whole argument segment and suppress irrelevant path
   completion while typing command arguments (pi ≥ 0.79.1).
-- The package's `examples/extensions/summarize.ts` remains the canonical extension reference; with pi-ai
-  `0.80.1`, import legacy `complete()` calls from `@earendil-works/pi-ai/compat`.
+- Use `complete()` from `@earendil-works/pi-ai/compat` for Pi's compatibility streaming helper.
