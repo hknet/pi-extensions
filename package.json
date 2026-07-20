@@ -52,5 +52,9 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "rm -rf .tmp-test && tsc -p tsconfig.test.json && node --test .tmp-test/tests/**/*.test.js"
+  },
+  "allowScripts": {
+    "@google/genai@1.52.0": false,
+    "protobufjs@7.6.4": false
   }
 }
