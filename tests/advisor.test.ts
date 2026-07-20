@@ -44,9 +44,9 @@ test("validateAdvisorConfig keeps valid keys and ignores invalid keys", () => {
         whenStuck: -1,
         timeoutMs: 1.5,
       }),
-      {},
+      { thinking: "extreme" },
     );
-    assert.ok(warnings.length >= 5);
+    assert.ok(warnings.length >= 4);
   } finally {
     console.warn = originalWarn;
   }
@@ -94,7 +94,7 @@ test("buildTranscript drops oldest sections when context budget is exceeded", ()
   assert.match(transcript, /threethree/);
 });
 
-test("advisor completions include subcommands and preserve earlier arguments for second-token completion", () => {
+test("advisor completions include subcommands and require a cached reviewer model for thinking levels", () => {
   const firstToken = getAdvisorCompletions("on") ?? [];
   assert.deepEqual(firstToken.find((item) => item.label === "on-done"), {
     value: "on-done",
@@ -102,25 +102,15 @@ test("advisor completions include subcommands and preserve earlier arguments for
     description: "Toggle automatic review when the agent finishes",
   });
 
-  const completions = getAdvisorCompletions("kapper-ai/Anthropic.claude-opus-4-8 xh") ?? [];
-  assert.deepEqual(
-    completions.find((item) => item.label === "xhigh"),
-    {
-      value: "kapper-ai/Anthropic.claude-opus-4-8 xhigh",
-      label: "xhigh",
-      description: "Maximum reasoning budget",
-    },
-  );
+  // No levels are offered for an unknown model: levels come from Pi's cached,
+  // model-specific capabilities rather than a local static list.
+  assert.deepEqual(getAdvisorCompletions("kapper-ai/Anthropic.claude-opus-4-8 "), []);
 
-  const afterModelSpace = getAdvisorCompletions("kapper-ai/Anthropic.claude-opus-4-8 ") ?? [];
-  assert.deepEqual(afterModelSpace.find((item) => item.label === "high"), {
-    value: "kapper-ai/Anthropic.claude-opus-4-8 high",
-    label: "high",
-    description: "More reasoning for harder tasks",
-  });
-
-  const onDone = getAdvisorCompletions("on-done o") ?? [];
+  const onDone = getAdvisorCompletions("on-done ") ?? [];
   assert.deepEqual(onDone.find((item) => item.label === "on"), { value: "on-done on", label: "on" });
+
+  const whenStuck = getAdvisorCompletions("when-stuck ") ?? [];
+  assert.deepEqual(whenStuck.find((item) => item.label === "1"), { value: "when-stuck 1", label: "1" });
 });
 
 test("resolveAdviseMode defaults to pipe when idle and steer when running", () => {

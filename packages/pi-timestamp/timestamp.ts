@@ -6,9 +6,63 @@
  *
  * - Shows `Sent HH:MM:SS` after each user message in the chat UI
  * - Shows `Done at HH:MM:SS · duration` after each agent turn in the chat UI
+ * - Summarizes completed sessions and the complete Pi process runtime
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+
+export interface SessionInterval {
+    id: string;
+    startedAt: number;
+    endedAt: number;
+}
+
+export interface TimestampRuntimeState {
+    processStartedAt: number;
+    activeSession: { id: string; startedAt: number } | undefined;
+    completedSessions: SessionInterval[];
+    pendingSessionSummary: SessionInterval | undefined;
+}
+
+const RUNTIME_STATE_KEY = Symbol.for("hknet.pi-timestamp.runtime-state");
+
+export function createRuntimeState(processStartedAt: number): TimestampRuntimeState {
+    return { processStartedAt, activeSession: undefined, completedSessions: [], pendingSessionSummary: undefined };
+}
+
+function getRuntimeState(): TimestampRuntimeState {
+    const globalStore = globalThis as Record<symbol, unknown>;
+    const existing = globalStore[RUNTIME_STATE_KEY];
+    if (existing && typeof existing === "object") return existing as TimestampRuntimeState;
+
+    // The extension can load after Pi has initialized. Anchor the summary to the
+    // Node process start rather than the extension load time.
+    const state = createRuntimeState(Date.now() - process.uptime() * 1000);
+    globalStore[RUNTIME_STATE_KEY] = state;
+    return state;
+}
+
+export function beginSession(state: TimestampRuntimeState, id: string, startedAt: number): boolean {
+    if (state.activeSession?.id === id) return false;
+    state.activeSession = { id, startedAt };
+    return true;
+}
+
+export function finishSession(state: TimestampRuntimeState, endedAt: number): SessionInterval | undefined {
+    const active = state.activeSession;
+    if (!active) return undefined;
+
+    const interval = { ...active, endedAt };
+    state.completedSessions.push(interval);
+    state.activeSession = undefined;
+    return interval;
+}
+
+export function takePendingSessionSummary(state: TimestampRuntimeState): SessionInterval | undefined {
+    const pending = state.pendingSessionSummary;
+    state.pendingSessionSummary = undefined;
+    return pending;
+}
 
 function formatTime(ts: number): string {
     const d = new Date(ts);
@@ -16,6 +70,27 @@ function formatTime(ts: number): string {
     const mm = String(d.getMinutes()).padStart(2, "0");
     const ss = String(d.getSeconds()).padStart(2, "0");
     return `${hh}:${mm}:${ss}`;
+}
+
+function formatDateTime(ts: number): string {
+    const d = new Date(ts);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd} ${formatTime(ts)}`;
+}
+
+function isSameLocalDate(left: number, right: number): boolean {
+    const a = new Date(left);
+    const b = new Date(right);
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function formatSessionRange(session: SessionInterval): string {
+    if (isSameLocalDate(session.startedAt, session.endedAt)) {
+        return `${formatTime(session.startedAt)}–${formatTime(session.endedAt)}`;
+    }
+    return `${formatDateTime(session.startedAt)} → ${formatDateTime(session.endedAt)}`;
 }
 
 function formatDuration(ms: number): string {
@@ -32,6 +107,27 @@ function formatDuration(ms: number): string {
     return `${Math.floor(hrs)}h ${Math.floor(totalMins % 60)}m`;
 }
 
+export function formatRuntimeDuration(ms: number): string {
+    let remainingSeconds = Math.max(0, Math.floor(ms / 1000));
+    const weeks = Math.floor(remainingSeconds / (7 * 24 * 60 * 60));
+    remainingSeconds %= 7 * 24 * 60 * 60;
+    const days = Math.floor(remainingSeconds / (24 * 60 * 60));
+    remainingSeconds %= 24 * 60 * 60;
+    const hours = Math.floor(remainingSeconds / (60 * 60));
+    remainingSeconds %= 60 * 60;
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = remainingSeconds % 60;
+
+    const parts = [
+        weeks > 0 ? `${weeks}w` : undefined,
+        days > 0 ? `${days}d` : undefined,
+        hours > 0 ? `${hours}h` : undefined,
+        minutes > 0 ? `${minutes}m` : undefined,
+        `${seconds}s`,
+    ];
+    return parts.filter((part): part is string => part !== undefined).join(" ");
+}
+
 function isTimeoutErrorMessage(message: string | undefined): boolean {
     return /timed? out|timeout/i.test(message ?? "");
 }
@@ -39,6 +135,10 @@ function isTimeoutErrorMessage(message: string | undefined): boolean {
 export default function (pi: ExtensionAPI) {
     let taskStartTime: number | undefined;
     let waitingForRetryAfterTimeout = false;
+
+    function notifyAccent(ctx: ExtensionContext, message: string): void {
+        ctx.ui.notify(ctx.ui.theme.fg("accent", message), "info");
+    }
 
     // Track when the agent starts processing. If Pi is auto-retrying after a timeout,
     // keep the original start time so the eventual completion covers the full task.
@@ -87,5 +187,51 @@ export default function (pi: ExtensionAPI) {
         const duration = endTime - startTime;
 
         ctx.ui.notify(`Done at ${formatTime(endTime)} · ${formatDuration(duration)}`, "info");
+    });
+
+    pi.on("session_start", (_event, ctx) => {
+        const state = getRuntimeState();
+        const previousSession = takePendingSessionSummary(state);
+        if (previousSession) {
+            notifyAccent(
+                ctx,
+                `Previous session complete · ${formatSessionRange(previousSession)} · ${formatRuntimeDuration(previousSession.endedAt - previousSession.startedAt)}`,
+            );
+        }
+
+        const sessionId = ctx.sessionManager.getSessionId();
+        // A reload rebinds the extension to the same session. Keep its timer running.
+        beginSession(state, sessionId, Date.now());
+    });
+
+    pi.on("session_shutdown", (event, ctx) => {
+        // Reload replaces the extension runtime but not the Pi session.
+        if (event.reason === "reload") return;
+
+        const endTime = Date.now();
+        const interval = finishSession(getRuntimeState(), endTime);
+
+        if (event.reason !== "quit") {
+            if (interval) getRuntimeState().pendingSessionSummary = interval;
+            return;
+        }
+
+        const state = getRuntimeState();
+        const sessionRows = state.completedSessions.map(
+            (session, index) =>
+                `  ${index + 1}. ${formatSessionRange(session)} · ${formatRuntimeDuration(session.endedAt - session.startedAt)}`,
+        );
+        // On normal Ctrl+D shutdown Pi has already stopped the TUI, so ui.notify()
+        // cannot render. Write after terminal restoration instead.
+        const summary = [
+            "Pi runtime complete",
+            `  Started: ${formatDateTime(state.processStartedAt)}`,
+            `  Ended:   ${formatDateTime(endTime)}`,
+            `  Total:   ${formatRuntimeDuration(endTime - state.processStartedAt)}`,
+            ...(sessionRows.length > 0 ? ["  Sessions:", ...sessionRows] : []),
+        ].join("\n");
+        if (ctx.mode === "tui") {
+            process.stdout.write(`${ctx.ui.theme.fg("accent", summary)}\n`);
+        }
     });
 }

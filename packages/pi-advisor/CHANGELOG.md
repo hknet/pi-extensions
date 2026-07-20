@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.4 - 2026-07-20
+
+### Changed
+
+- Derive advisor thinking-level choices from Pi's supported levels for the selected reviewer model.
+- Add `max` support where the selected reviewer model exposes it.
+- Improve `/advisor` autocomplete: `/adviso...` completes without a trailing space; model completion leads to that model's thinking-level picker; `on-done` and `when-stuck` open their value pickers directly.
+
 ## 0.1.3 - 2026-06-24
 
 ### Changed

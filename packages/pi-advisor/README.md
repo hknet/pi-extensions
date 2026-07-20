@@ -66,7 +66,7 @@ JSON, resolved **project-over-global** (first scope that defines a key wins):
 ```jsonc
 {
   "model":     "openai-codex/gpt-5.5",      // "provider/id", or "none" to disable + hide the tool
-  "thinking":  "high",                      // off|minimal|low|medium|high|xhigh (default high)
+  "thinking":  "high",                      // a level supported by the selected reviewer model (default high)
   "onDone":    false,                       // auto-review when the agent finishes a task
   "whenStuck": 0,                           // auto-consult after N consecutive errors or N repeated identical tool calls (0 = off)
   "timeoutMs": 120000                       // advisor call timeout in ms (0 = use provider default)
@@ -99,6 +99,8 @@ are selectable.
 | `/advisor when-stuck off\|<N>` | Trigger advisor on N consecutive errors or N repeated identical tool calls → choose scope |
 | `/advisor status` | Show the resolved configuration |
 | `/advise [show\|pipe\|steer]` | Run a one-off review now; default is `pipe` when idle and `steer` while the agent is running |
+
+Autocomplete completes `/adviso...` to `/advisor` without Pi's trailing-space insertion, then offers advisor configuration choices. `/advise` keeps Pi's standard completion behavior.
 
 ### `/advise` modes
 

@@ -1,0 +1,23 @@
+{
+  "name": "pi-set-model",
+  "version": "0.1.0",
+  "description": "Pi extension that remembers model and thinking level per project folder",
+  "type": "module",
+  "private": false,
+  "keywords": ["pi-package", "pi", "extension", "model", "thinking", "project"],
+  "license": "EUPL-1.2",
+  "author": "hknet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hknet/pi-extensions.git",
+    "directory": "packages/pi-set-model"
+  },
+  "bugs": { "url": "https://github.com/hknet/pi-extensions/issues" },
+  "homepage": "https://github.com/hknet/pi-extensions/tree/main/packages/pi-set-model#readme",
+  "files": ["set-model.ts", "README.md"],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.80.10",
+    "@earendil-works/pi-tui": ">=0.80.10"
+  },
+  "pi": { "extensions": ["./set-model.ts"] }
+}

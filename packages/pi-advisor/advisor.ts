@@ -14,7 +14,7 @@
  *
  *   {
  *     "model":   "provider/id" | "none",   // "none" disables + hides the tool
- *     "thinking":"off|minimal|low|medium|high|xhigh",   // default "high"
+ *     "thinking":"<model-supported level>",   // default "high"
  *     "onDone":   true,                     // auto-review when the agent finishes (default off)
  *     "whenStuck": 3,                       // auto-consult after N consecutive tool errors (0/off)
  *     "timeoutMs": 120000                   // advisor call timeout in ms (0 = use provider default)
@@ -40,8 +40,8 @@
  * call advisor, nudged by the tool's prompt guidelines. The optional deterministic
  * triggers and `/advise` command provide additional ways to request reviewer feedback.
  */
-import { Type } from "@earendil-works/pi-ai";
-import type { Api, Model } from "@earendil-works/pi-ai";
+import { getSupportedThinkingLevels, Type } from "@earendil-works/pi-ai";
+import type { Api, Model, ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { complete } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
@@ -51,9 +51,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
-type ThinkingLevel = (typeof THINKING_LEVELS)[number];
-const DEFAULT_THINKING: ThinkingLevel = "high";
+type ThinkingLevel = ModelThinkingLevel;
+const DEFAULT_THINKING = "high";
 const DISABLED = "none";
 const MAX_VISIBLE_MODEL_CHOICES = 12;
 export const MAX_TOOL_CALL_ARGS_CHARS = 800;
@@ -71,23 +70,21 @@ const ADVISOR_FIRST_TOKEN_ITEMS: AutocompleteItem[] = [
   { value: "?", label: "?", description: "Show /advisor usage" },
 ];
 
-const THINKING_LEVEL_DESCRIPTIONS: Record<ThinkingLevel, string> = {
-  off: "Disable extended thinking",
-  minimal: "Smallest available thinking budget",
-  low: "Light reasoning",
-  medium: "Balanced default reasoning",
-  high: "More reasoning for harder tasks",
-  xhigh: "Maximum reasoning budget",
-};
-
-// Cached model list for autocomplete (refreshed on session_start)
+// Cached model list for autocomplete (refreshed on session_start).
 let cachedModelSpecs: string[] = [];
+let cachedModels = new Map<string, Model<Api>>();
 
-function thinkingLevelItems(prefix: string): AutocompleteItem[] {
+function cacheModels(models: Model<Api>[]): void {
+  cachedModels = new Map(models.map((model) => [`${model.provider}/${model.id}`, model]));
+  cachedModelSpecs = [...cachedModels.keys()].sort();
+}
+
+function thinkingLevelItems(model: Model<Api> | undefined, prefix: string): AutocompleteItem[] {
+  if (!model) return [];
   const normalized = prefix.toLowerCase().trim();
-  return (THINKING_LEVELS as readonly string[])
+  return getSupportedThinkingLevels(model)
     .filter((level) => level.startsWith(normalized))
-    .map((level) => ({ value: level, label: level, description: THINKING_LEVEL_DESCRIPTIONS[level as ThinkingLevel] }));
+    .map((level) => ({ value: level, label: level, description: "Supported by this reviewer model" }));
 }
 
 export function getAdvisorCompletions(args: string): AutocompleteItem[] | null {
@@ -99,12 +96,11 @@ export function getAdvisorCompletions(args: string): AutocompleteItem[] | null {
   const normalized = prefix.toLowerCase();
 
   if (tokens.length === 0) {
-    // No tokens yet — suggest subcommands, thinking levels, and model list.
-    const levels = thinkingLevelItems(prefix);
+    // No tokens yet — suggest subcommands and available reviewer models.
     const models = cachedModelSpecs
       .filter((spec) => spec.toLowerCase().includes(normalized))
       .map((spec) => ({ value: spec, label: spec }));
-    return [...ADVISOR_FIRST_TOKEN_ITEMS, ...levels, ...models];
+    return [...ADVISOR_FIRST_TOKEN_ITEMS, ...models];
   }
 
   const head = tokens[0].toLowerCase();
@@ -127,14 +123,27 @@ export function getAdvisorCompletions(args: string): AutocompleteItem[] | null {
     return []; // These are terminal commands
   }
 
+  // A model plus thinking level is a complete /advisor command. Do not offer
+  // another level picker after the user types a trailing space.
+  if (tokens.length > 1 && hasTrailingSpace) return [];
+
   if (completingSecondToken) {
-    return thinkingLevelItems(prefix).map((item) => ({
+    return thinkingLevelItems(cachedModels.get(tokens[0]), prefix).map((item) => ({
       ...item,
       value: `${tokens[0]} ${item.value}`,
     }));
   }
 
-  // First token: could be a subcommand, model spec, or thinking level — prefer explicit commands and models first.
+  // After model-name completion, a further Tab opens that model's level picker.
+  const exactModel = cachedModels.get(tokens[0]);
+  if (exactModel) {
+    return thinkingLevelItems(exactModel, "").map((item) => ({
+      ...item,
+      value: `${tokens[0]} ${item.value}`,
+    }));
+  }
+
+  // First token: could be a subcommand or model spec — prefer explicit commands.
   const firstTokenMatches = ADVISOR_FIRST_TOKEN_ITEMS.filter((item) => item.value.startsWith(normalized));
   const modelMatches = cachedModelSpecs
     .filter((spec) => spec.toLowerCase().includes(normalized))
@@ -142,7 +151,7 @@ export function getAdvisorCompletions(args: string): AutocompleteItem[] | null {
   if (firstTokenMatches.length > 0 || modelMatches.length > 0) {
     return [...firstTokenMatches, ...modelMatches];
   }
-  return thinkingLevelItems(prefix);
+  return [];
 }
 
 function getAdviseCompletions(prefix: string): AutocompleteItem[] | null {
@@ -158,6 +167,10 @@ function commandArgumentCompletions(command: "advisor" | "advise", args: string)
   const items = command === "advisor" ? getAdvisorCompletions(args) : getAdviseCompletions(args);
   if (!items || items.length === 0) return null;
   return { prefix: args, items };
+}
+
+function isAdvisorCommandPrefix(value: string): boolean {
+  return value.startsWith("/adviso") && "/advisor".startsWith(value);
 }
 
 export type AdviseMode = "show" | "pipe" | "steer";
@@ -198,7 +211,7 @@ Always return your advice as visible assistant text. Do not return reasoning-onl
 
 type AdvisorConfig = {
   model?: string;
-  thinking?: ThinkingLevel;
+  thinking?: string;
   onDone?: boolean;
   whenStuck?: number;
   timeoutMs?: number;
@@ -222,10 +235,10 @@ export function validateAdvisorConfig(raw: unknown, source = "advisor config"): 
     else warn('"model" must be a string');
   }
   if (input.thinking !== undefined) {
-    if (typeof input.thinking === "string" && (THINKING_LEVELS as readonly string[]).includes(input.thinking)) {
-      clean.thinking = input.thinking as ThinkingLevel;
+    if (typeof input.thinking === "string" && input.thinking.trim()) {
+      clean.thinking = input.thinking.trim();
     } else {
-      warn(`"thinking" must be one of: ${THINKING_LEVELS.join(", ")}`);
+      warn('"thinking" must be a non-empty string');
     }
   }
   if (input.onDone !== undefined) {
@@ -279,15 +292,14 @@ const DEFAULT_TIMEOUT_MS = 120_000; // 2 minutes
 type EffectiveAdvisorConfig = {
   spec: string | undefined;
   source: string;
-  thinking: ThinkingLevel;
+  thinking: string;
   onDone: boolean;
   whenStuck: number;
   timeoutMs: number;
 };
 
-function envThinkingLevel(): ThinkingLevel | undefined {
-  const env = process.env.PI_ADVISOR_EFFORT?.trim();
-  return env && (THINKING_LEVELS as readonly string[]).includes(env) ? (env as ThinkingLevel) : undefined;
+function envThinkingLevel(): string | undefined {
+  return process.env.PI_ADVISOR_EFFORT?.trim() || undefined;
 }
 
 function envTimeoutMs(): number | undefined {
@@ -332,7 +344,7 @@ function effectiveModelSpec(cwd: string, projectTrusted = true): { spec: string 
   return { spec, source };
 }
 
-function effectiveThinking(cwd: string, projectTrusted = true): ThinkingLevel {
+function effectiveThinking(cwd: string, projectTrusted = true): string {
   return resolveEffectiveConfig(cwd, projectTrusted).thinking;
 }
 
@@ -396,7 +408,7 @@ async function resolveAdvisor(ctx: ExtensionContext): Promise<Resolved | null> {
   const cwd = ctx.cwd;
   const projectTrusted = contextProjectTrusted(ctx);
   const { spec, source } = effectiveModelSpec(cwd, projectTrusted);
-  const thinking = effectiveThinking(cwd, projectTrusted);
+  const requestedThinking = effectiveThinking(cwd, projectTrusted);
   const timeoutMs = effectiveTimeoutMs(cwd, projectTrusted);
   const warnings: string[] = [];
 
@@ -404,14 +416,23 @@ async function resolveAdvisor(ctx: ExtensionContext): Promise<Resolved | null> {
 
   // Refresh before resolving so OAuth/subscription-backed model mutations and
   // newly logged-in providers are visible to advisor just like they are to /model.
-  refreshAvailableModels(ctx);
+  cacheModels(refreshAvailableModels(ctx));
 
   if (!spec) {
     throw new Error("Advisor is not configured. Choose a trusted reviewer model with /advisor before sending transcripts.");
   }
 
   const hit = await tryModel(ctx, spec);
-  if (hit) return { ...hit, thinking, timeoutMs, warnings };
+  if (hit) {
+    const supported = getSupportedThinkingLevels(hit.model);
+    const thinking = supported.includes(requestedThinking as ThinkingLevel)
+      ? (requestedThinking as ThinkingLevel)
+      : (supported.includes(DEFAULT_THINKING) ? DEFAULT_THINKING : supported[0] ?? "off");
+    if (thinking !== requestedThinking) {
+      warnings.push(`Thinking level "${requestedThinking}" is unsupported by ${spec}; using "${thinking}".`);
+    }
+    return { ...hit, thinking, timeoutMs, warnings };
+  }
 
   throw new Error(
     `Configured advisor model "${spec}" (${source}) is unavailable or lacks auth. Choose another model with /advisor or set PI_ADVISOR_MODEL.`,
@@ -677,9 +698,7 @@ export default function advisorExtension(pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     // Cache model specs for autocomplete.
-    cachedModelSpecs = refreshAvailableModels(ctx)
-      .map((m) => `${m.provider}/${m.id}`)
-      .sort();
+    cacheModels(refreshAvailableModels(ctx));
     stuckErrors = 0;
     autoReviewedThisRound = false;
     applyActivation(ctx.cwd, contextProjectTrusted(ctx));
@@ -694,8 +713,24 @@ export default function advisorExtension(pi: ExtensionAPI) {
       async getSuggestions(lines, cursorLine, cursorCol, options) {
         const line = lines[cursorLine] ?? "";
         const beforeCursor = line.slice(0, cursorCol);
-        const match = beforeCursor.match(/^\/(advisor|advise)\s+(.*)$/);
+        if (cursorCol === line.length && isAdvisorCommandPrefix(beforeCursor)) {
+          if (beforeCursor === "/advisor") {
+            return { prefix: "", items: getAdvisorCompletions("") ?? [] };
+          }
+          return {
+            prefix: beforeCursor,
+            items: [{ value: "advisor", label: "advisor", description: "Configure the advisor" }],
+          };
+        }
+        if (beforeCursor === "/advisor ") {
+          return { prefix: "", items: getAdvisorCompletions("") ?? [] };
+        }
+        const triggerMatch = beforeCursor.match(/^\/advisor\s+(on-done|when-stuck)$/);
+        if (triggerMatch && cursorCol === line.length) {
+          return { prefix: "", items: getAdvisorCompletions(`${triggerMatch[1]} `) ?? [] };
+        }
 
+        const match = beforeCursor.match(/^\/(advisor|advise)\s+(.*)$/);
         if (!match) return current.getSuggestions(lines, cursorLine, cursorCol, options);
 
         const command = match[1] as "advisor" | "advise";
@@ -704,13 +739,40 @@ export default function advisorExtension(pi: ExtensionAPI) {
       },
 
       applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+        const line = lines[cursorLine] ?? "";
+        const beforeCursor = line.slice(0, cursorCol);
+        if (cursorCol === line.length && isAdvisorCommandPrefix(beforeCursor)) {
+          if (beforeCursor !== "/advisor") {
+            return {
+              lines: [...lines.slice(0, cursorLine), "/advisor", ...lines.slice(cursorLine + 1)],
+              cursorLine,
+              cursorCol: "/advisor".length,
+            };
+          }
+          const nextLine = `/advisor ${item.value}`;
+          return {
+            lines: [...lines.slice(0, cursorLine), nextLine, ...lines.slice(cursorLine + 1)],
+            cursorLine,
+            cursorCol: nextLine.length,
+          };
+        }
+        if (
+          (beforeCursor === "/advisor " || /^\/advisor\s+(on-done|when-stuck)$/.test(beforeCursor)) &&
+          cursorCol === line.length
+        ) {
+          const nextLine = `/advisor ${item.value}`;
+          return {
+            lines: [...lines.slice(0, cursorLine), nextLine, ...lines.slice(cursorLine + 1)],
+            cursorLine,
+            cursorCol: nextLine.length,
+          };
+        }
         return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
       },
 
       shouldTriggerFileCompletion(lines, cursorLine, cursorCol) {
-        const line = lines[cursorLine] ?? "";
-        const beforeCursor = line.slice(0, cursorCol);
-        if (/^\/(advisor|advise)\s+/.test(beforeCursor)) return false;
+        // Let Tab reach getSuggestions(). This provider handles advisor syntax
+        // before the built-in file provider is consulted.
         return current.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? true;
       },
     }));
@@ -895,7 +957,7 @@ export default function advisorExtension(pi: ExtensionAPI) {
       const tokens = (args ?? "").trim().split(/\s+/).filter(Boolean);
       const cwd = ctx.cwd;
       const head = tokens[0]?.toLowerCase();
-      refreshAvailableModels(ctx);
+      cacheModels(refreshAvailableModels(ctx));
 
       if (head === "?") {
         ctx.ui.notify(
@@ -987,10 +1049,13 @@ export default function advisorExtension(pi: ExtensionAPI) {
         }
         modelValue = tokens[0];
         if (tokens[1]) {
-          if (!(THINKING_LEVELS as readonly string[]).includes(tokens[1].toLowerCase())) {
-            return ctx.ui.notify(`Invalid thinking level "${tokens[1]}". One of: ${THINKING_LEVELS.join(", ")}.`, "error");
+          const model = ctx.modelRegistry.find(parsed.provider, parsed.id);
+          const supported = model ? getSupportedThinkingLevels(model) : [];
+          const requested = tokens[1].toLowerCase() as ThinkingLevel;
+          if (!supported.includes(requested)) {
+            return ctx.ui.notify(`Invalid thinking level "${tokens[1]}". Supported: ${supported.join(", ") || "off"}.`, "error");
           }
-          thinkingArg = tokens[1].toLowerCase() as ThinkingLevel;
+          thinkingArg = requested;
         }
       }
 
@@ -998,11 +1063,14 @@ export default function advisorExtension(pi: ExtensionAPI) {
       if (!file) return;
 
       let thinking = thinkingArg;
-      if (!thinking && modelValue !== DISABLED && tokens.length === 0) {
+      if (!thinking && modelValue !== DISABLED && tokens.length === 0 && modelValue) {
+        const parsed = parseSpec(modelValue);
+        const model = parsed ? ctx.modelRegistry.find(parsed.provider, parsed.id) : undefined;
+        const supported = model ? getSupportedThinkingLevels(model) : [];
         const KEEP = "keep current";
-        const pick = await ctx.ui.select("Thinking level", ["high (default)", "xhigh", "medium", "low", "minimal", "off", KEEP]);
+        const pick = await ctx.ui.select("Thinking level", [...supported, KEEP]);
         if (pick === undefined) return;
-        if (pick !== KEEP) thinking = pick.split(" ")[0] as ThinkingLevel;
+        if (pick !== KEEP) thinking = pick as ThinkingLevel;
       }
 
       persist(file, { model: modelValue, ...(thinking ? { thinking } : {}) });

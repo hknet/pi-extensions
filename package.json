@@ -1,7 +1,7 @@
 {
   "name": "pi-extensions",
-  "version": "0.2.4",
-  "description": "Pi agent extensions: advisor tool, thinking command, and timestamp display",
+  "version": "0.3.0",
+  "description": "Pi agent extensions: advisor, thinking command, timestamps, and per-project model preferences",
   "type": "module",
   "private": false,
   "workspaces": [
@@ -26,17 +26,18 @@
     "packages/pi-advisor",
     "packages/pi-thinking-command",
     "packages/pi-timestamp",
+    "packages/pi-set-model",
     "README.md"
   ],
   "peerDependencies": {
-    "@earendil-works/pi-ai": ">=0.80.2",
-    "@earendil-works/pi-coding-agent": ">=0.80.2",
-    "@earendil-works/pi-tui": ">=0.80.2"
+    "@earendil-works/pi-ai": ">=0.80.10",
+    "@earendil-works/pi-coding-agent": ">=0.80.10",
+    "@earendil-works/pi-tui": ">=0.80.10"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.80.2",
-    "@earendil-works/pi-coding-agent": "^0.80.2",
-    "@earendil-works/pi-tui": "^0.80.2",
+    "@earendil-works/pi-ai": "^0.80.10",
+    "@earendil-works/pi-coding-agent": "^0.80.10",
+    "@earendil-works/pi-tui": "^0.80.10",
     "@types/node": "^20.0.0",
     "typescript": "^5.0.0"
   },
@@ -44,7 +45,8 @@
     "extensions": [
       "./packages/pi-advisor/advisor.ts",
       "./packages/pi-thinking-command/thinking-shortcut.ts",
-      "./packages/pi-timestamp/timestamp.ts"
+      "./packages/pi-timestamp/timestamp.ts",
+      "./packages/pi-set-model/set-model.ts"
     ]
   },
   "scripts": {

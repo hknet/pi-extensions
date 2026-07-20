@@ -36,7 +36,7 @@ After installing, restart pi or run:
 ## Usage
 
 ```text
-/thinking [off|minimal|low|medium|high|xhigh]
+/thinking [off|minimal|low|medium|high|xhigh|max]
 ```
 
 Examples:
@@ -47,6 +47,7 @@ Examples:
 /thinking medium
 /thinking high
 /thinking xhigh
+/thinking max
 ```
 
 If no argument is provided, `/thinking` sets the level to `medium`.
@@ -58,7 +59,8 @@ If no argument is provided, `/thinking` sets the level to `medium`.
 - `low` — light reasoning
 - `medium` — balanced default reasoning
 - `high` — more reasoning for harder tasks
-- `xhigh` — maximum reasoning budget
+- `xhigh` — very high reasoning budget
+- `max` — maximum reasoning budget
 
 > **Note:** If the current model does not support the requested level, pi clamps to the
 > nearest supported level (searching both up and down the level hierarchy).
@@ -67,6 +69,7 @@ If no argument is provided, `/thinking` sets the level to `medium`.
 
 - Registers the `/thinking` command.
 - Provides argument completions for all supported levels.
+- Autocompletes `/th...` to `/thinking` without Pi's trailing-space insertion, then presents the level picker.
 - Shows a `thinking` status item with the current level.
 - Updates the status item when the thinking level changes.
 - Validates input and displays an error for unknown levels.

@@ -2,7 +2,7 @@
 
 Collection of [pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) extensions — small, self-contained plugins that add tools, commands, and automatic behaviors to the pi coding agent.
 
-Requires pi `>= 0.80.2` for the current release.
+Requires pi `>= 0.80.10` for the current release.
 
 ## Extensions
 
@@ -10,7 +10,8 @@ Requires pi `>= 0.80.2` for the current release.
 |---|---|
 | [**pi-advisor**](./packages/pi-advisor/) | A parameterless `advisor` tool that forwards the full conversation transcript to a stronger reviewer model for direct, actionable advice. |
 | [**pi-thinking-command**](./packages/pi-thinking-command/) | Adds a `/thinking` slash command for changing the active thinking/reasoning level from inside a session. |
-| [**pi-timestamp**](./packages/pi-timestamp/) | Shows timestamps for user input (`Sent HH:MM:SS`) and agent completion timing (`Done at HH:MM:SS · duration`). |
+| [**pi-timestamp**](./packages/pi-timestamp/) | Shows user/agent timestamps plus session-switch and full Pi-runtime summaries. |
+| [**pi-set-model**](./packages/pi-set-model/) | Remembers the selected model and thinking level separately for each project folder. |
 
 ## Installation
 
@@ -48,6 +49,7 @@ Install individual extensions from npm:
 pi install npm:@hk_net/pi-advisor
 pi install npm:@hk_net/pi-thinking-command
 pi install npm:@hk_net/pi-timestamp
+pi install npm:pi-set-model
 ```
 
 ### Manual install (fallback)
@@ -59,6 +61,7 @@ mkdir -p ~/.pi/agent/extensions
 cp packages/pi-advisor/advisor.ts ~/.pi/agent/extensions/advisor.ts
 cp packages/pi-thinking-command/thinking-shortcut.ts ~/.pi/agent/extensions/thinking-shortcut.ts
 cp packages/pi-timestamp/timestamp.ts ~/.pi/agent/extensions/timestamp.ts
+cp packages/pi-set-model/set-model.ts ~/.pi/agent/extensions/set-model.ts
 ```
 
 ## Structure
@@ -76,10 +79,14 @@ pi-extensions/
 │   │   ├── package.json       # npm package @hk_net/pi-thinking-command
 │   │   ├── README.md
 │   │   └── thinking-shortcut.ts # Canonical source
-│   └── pi-timestamp/
-│       ├── package.json       # npm package @hk_net/pi-timestamp
+│   ├── pi-timestamp/
+│   │   ├── package.json       # npm package @hk_net/pi-timestamp
+│   │   ├── README.md
+│   │   └── timestamp.ts       # Canonical source
+│   └── pi-set-model/
+│       ├── package.json       # npm package pi-set-model
 │       ├── README.md
-│       └── timestamp.ts       # Canonical source
+│       └── set-model.ts   # Canonical source
 ```
 
 The root `package.json` declares the `pi.extensions` manifest so `pi install` can load the declared `.ts` extension files from the package. Each extension is self-contained: a single TypeScript module exporting the extension factory function and its own README for documentation.

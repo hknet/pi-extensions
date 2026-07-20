@@ -1,9 +1,9 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
-type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+type ThinkingLevel = Parameters<ExtensionAPI["setThinkingLevel"]>[0];
 
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const satisfies readonly ThinkingLevel[];
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const satisfies readonly ThinkingLevel[];
 
 const THINKING_LEVEL_DESCRIPTIONS: Record<ThinkingLevel, string> = {
   off: "Disable extended thinking",
@@ -11,15 +11,16 @@ const THINKING_LEVEL_DESCRIPTIONS: Record<ThinkingLevel, string> = {
   low: "Light reasoning",
   medium: "Balanced default reasoning",
   high: "More reasoning for harder tasks",
-  xhigh: "Maximum reasoning budget",
+  xhigh: "Very high reasoning budget",
+  max: "Maximum reasoning budget",
 };
 
-function normalizeThinkingLevel(input: string): ThinkingLevel | undefined {
+export function normalizeThinkingLevel(input: string): ThinkingLevel | undefined {
   const normalized = input.toLowerCase().trim();
   return THINKING_LEVELS.find((level) => level === normalized);
 }
 
-function getThinkingLevelCompletions(prefix: string): AutocompleteItem[] | null {
+export function getThinkingLevelCompletions(prefix: string): AutocompleteItem[] | null {
   const normalizedPrefix = prefix.toLowerCase().trimStart();
   const matches = THINKING_LEVELS.filter((level) => level.startsWith(normalizedPrefix));
 
@@ -32,8 +33,71 @@ function getThinkingLevelCompletions(prefix: string): AutocompleteItem[] | null 
   }));
 }
 
+export function isThinkingCommandPrefix(value: string): boolean {
+  return value.startsWith("/th") && "/thinking".startsWith(value);
+}
+
 export default function thinkingShortcutExtension(pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
+    ctx.ui.addAutocompleteProvider((current) => ({
+      async getSuggestions(lines, cursorLine, cursorCol, options) {
+        const line = lines[cursorLine] ?? "";
+        const beforeCursor = line.slice(0, cursorCol);
+        if (cursorCol === line.length && isThinkingCommandPrefix(beforeCursor)) {
+          if (beforeCursor === "/thinking") {
+            return { prefix: "", items: getThinkingLevelCompletions("") ?? [] };
+          }
+          return {
+            prefix: beforeCursor,
+            items: [{ value: "thinking", label: "thinking", description: "Set the thinking level" }],
+          };
+        }
+        if (beforeCursor === "/thinking ") {
+          return { prefix: "", items: getThinkingLevelCompletions("") ?? [] };
+        }
+        return current.getSuggestions(lines, cursorLine, cursorCol, options);
+      },
+
+      applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+        const line = lines[cursorLine] ?? "";
+        const beforeCursor = line.slice(0, cursorCol);
+        if (cursorCol === line.length && isThinkingCommandPrefix(beforeCursor)) {
+          if (beforeCursor !== "/thinking") {
+            return {
+              lines: [...lines.slice(0, cursorLine), "/thinking", ...lines.slice(cursorLine + 1)],
+              cursorLine,
+              cursorCol: "/thinking".length,
+            };
+          }
+          const nextLine = `/thinking ${item.value}`;
+          return {
+            lines: [...lines.slice(0, cursorLine), nextLine, ...lines.slice(cursorLine + 1)],
+            cursorLine,
+            cursorCol: nextLine.length,
+          };
+        }
+        if (beforeCursor === "/thinking " && cursorCol === line.length) {
+          const nextLine = `/thinking ${item.value}`;
+          return {
+            lines: [...lines.slice(0, cursorLine), nextLine, ...lines.slice(cursorLine + 1)],
+            cursorLine,
+            cursorCol: nextLine.length,
+          };
+        }
+        return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
+      },
+
+      shouldTriggerFileCompletion(lines, cursorLine, cursorCol) {
+        const line = lines[cursorLine] ?? "";
+        const beforeCursor = line.slice(0, cursorCol);
+        if (
+          (isThinkingCommandPrefix(beforeCursor) || beforeCursor === "/thinking ") &&
+          cursorCol === line.length
+        ) return false;
+        return current.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? true;
+      },
+    }));
+
     ctx.ui.setStatus("thinking", `level: ${pi.getThinkingLevel()}`);
 
     ctx.ui.addAutocompleteProvider((current) => ({
@@ -69,7 +133,7 @@ export default function thinkingShortcutExtension(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("thinking", {
-    description: "Set the thinking level. Usage: /thinking [off|minimal|low|medium|high|xhigh]",
+    description: "Set the thinking level. Usage: /thinking [off|minimal|low|medium|high|xhigh|max]",
     getArgumentCompletions: getThinkingLevelCompletions,
     handler: async (args, ctx) => {
       const input = args?.trim() || "medium";
