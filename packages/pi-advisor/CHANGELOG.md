@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.6 - 2026-07-21
+
+### Changed
+
+- Raise the Pi peer dependency minimum to 0.81.1 and verify compatibility with that release.
+- Update the repository lockfile to Pi's packaged `brace-expansion` 5.0.7 dependency.
+
 ## 0.1.5 - 2026-07-20
 
 ### Changed

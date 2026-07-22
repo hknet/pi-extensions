@@ -1,6 +1,6 @@
 # pi-timestamp
 
-Shows timestamps for user input and agent completion timing. Requires pi `>=0.80.10`.
+Shows timestamps for user input and agent completion timing. Requires pi `>=0.81.1`.
 
 ## What it does
 
@@ -30,3 +30,12 @@ cp packages/pi-timestamp/timestamp.ts ~/.pi/agent/extensions/timestamp.ts
 ## Duration measurement
 
 Captured from `agent_start` (when the model starts processing) to `agent_end` (when all tool calls and model processing are done).
+
+## Issues and feedback
+
+Found a bug or have a feature request? Please report it on
+[GitHub Issues](https://github.com/hknet/pi-extensions/issues).
+
+For security vulnerabilities, please use
+[GitHub's private vulnerability reporting](https://github.com/hknet/pi-extensions/security/advisories/new)
+instead of opening a public issue.

@@ -1,6 +1,6 @@
 # `/thinking` command extension for pi
 
-Adds a `/thinking` slash command to pi `>=0.80.10` for changing the active thinking/reasoning level from inside a session.
+Adds a `/thinking` slash command to pi `>=0.81.1` for changing the active thinking/reasoning level from inside a session.
 
 Normally in pi, changing the thinking/reasoning level means opening the settings menu, navigating to **Thinking**, and selecting the requested level. This extension is a convenience shortcut for that workflow, so you can switch levels directly with commands such as `/thinking low` or `/thinking xhigh`.
 
@@ -73,3 +73,12 @@ If no argument is provided, `/thinking` sets the level to `medium`.
 - Shows a `thinking` status item with the current level.
 - Updates the status item when the thinking level changes.
 - Validates input and displays an error for unknown levels.
+
+## Issues and feedback
+
+Found a bug or have a feature request? Please report it on
+[GitHub Issues](https://github.com/hknet/pi-extensions/issues).
+
+For security vulnerabilities, please use
+[GitHub's private vulnerability reporting](https://github.com/hknet/pi-extensions/security/advisories/new)
+instead of opening a public issue.

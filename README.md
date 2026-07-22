@@ -2,7 +2,7 @@
 
 Collection of [pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) extensions — small, self-contained plugins that add tools, commands, and automatic behaviors to the pi coding agent.
 
-Requires pi `>= 0.80.10` for the current release.
+Requires pi `>= 0.81.1` for the current release.
 
 ## Extensions
 
@@ -101,3 +101,12 @@ The root `package.json` declares the `pi.extensions` manifest so `pi install` ca
 2. Run `npm test` and `npm run typecheck`.
 3. Re-deploy with `pi install /path/to/pi-extensions` (or copy manually and run `/reload`).
 4. See each extension's README for configuration options and usage details.
+
+## Issues and feedback
+
+Found a bug or have a feature request? Please report it on
+[GitHub Issues](https://github.com/hknet/pi-extensions/issues).
+
+For security vulnerabilities, please use
+[GitHub's private vulnerability reporting](https://github.com/hknet/pi-extensions/security/advisories/new)
+instead of opening a public issue.
