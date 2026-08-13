@@ -24,6 +24,7 @@
 - Bump every changed npm workspace version and the root GitHub-bundle version. Run `npm install` to synchronize `package-lock.json`.
 - Before a release, run `npm run typecheck`, `npm test`, and `npm pack --dry-run` for every workspace.
 - Never run bare `npm publish` at the repository root. Publish named workspaces explicitly.
+- Follow `RELEASING.md`: use npm staged publishing for existing packages and require human review plus 2FA approval before a staged release becomes public. A brand-new package requires a human-initiated direct publish first.
 - Never commit, tag, push, or publish without explicit user approval.
 
 ## Interaction

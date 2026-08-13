@@ -102,6 +102,8 @@ The root `package.json` declares the `pi.extensions` manifest so `pi install` ca
 3. Re-deploy with `pi install /path/to/pi-extensions` (or copy manually and run `/reload`).
 4. See each extension's README for configuration options and usage details.
 
+Release maintainers should follow [RELEASING.md](./RELEASING.md), including the human-first npm approval procedure.
+
 ## Issues and feedback
 
 Found a bug or have a feature request? Please report it on

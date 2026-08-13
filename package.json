@@ -51,7 +51,8 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "rm -rf .tmp-test && tsc -p tsconfig.test.json && node --test .tmp-test/tests/**/*.test.js"
+    "test": "rm -rf .tmp-test && tsc -p tsconfig.test.json && node --test .tmp-test/tests/**/*.test.js",
+    "release:stage": "npm stage publish --workspace @hk_net/pi-advisor --workspace @hk_net/pi-thinking-command --workspace @hk_net/pi-timestamp --workspace pi-set-model --access public"
   },
   "allowScripts": {
     "@google/genai@1.52.0": false,
