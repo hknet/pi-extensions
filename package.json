@@ -1,6 +1,6 @@
 {
   "name": "pi-extensions",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Pi agent extensions: advisor, thinking command, timestamps, and per-project model preferences",
   "type": "module",
   "private": false,
@@ -30,14 +30,14 @@
     "README.md"
   ],
   "peerDependencies": {
-    "@earendil-works/pi-ai": ">=0.81.1",
-    "@earendil-works/pi-coding-agent": ">=0.81.1",
-    "@earendil-works/pi-tui": ">=0.81.1"
+    "@earendil-works/pi-ai": ">=0.84.1",
+    "@earendil-works/pi-coding-agent": ">=0.84.1",
+    "@earendil-works/pi-tui": ">=0.84.1"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.81.1",
-    "@earendil-works/pi-coding-agent": "^0.81.1",
-    "@earendil-works/pi-tui": "^0.81.1",
+    "@earendil-works/pi-ai": "^0.84.1",
+    "@earendil-works/pi-coding-agent": "^0.84.1",
+    "@earendil-works/pi-tui": "^0.84.1",
     "@types/node": "^20.0.0",
     "typescript": "^5.0.0"
   },
@@ -55,6 +55,6 @@
   },
   "allowScripts": {
     "@google/genai@1.52.0": false,
-    "protobufjs@7.6.4": false
+    "protobufjs@7.6.5": false
   }
 }

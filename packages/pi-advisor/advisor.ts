@@ -41,7 +41,7 @@
  * triggers and `/advise` command provide additional ways to request reviewer feedback.
  */
 import { getSupportedThinkingLevels, Type } from "@earendil-works/pi-ai";
-import type { Api, Model, ModelThinkingLevel } from "@earendil-works/pi-ai";
+import type { Api, Model, ModelThinkingLevel, ProviderHeaders } from "@earendil-works/pi-ai";
 import { complete } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
@@ -368,7 +368,7 @@ function isUnconfigured(cwd: string, projectTrusted = true): boolean {
 type Resolved = {
   model: Model<Api>;
   apiKey?: string;
-  headers?: Record<string, string>;
+  headers?: ProviderHeaders;
   thinking: ThinkingLevel;
   timeoutMs: number;
   warnings: string[];
@@ -393,7 +393,7 @@ function refreshAvailableModels(ctx: ExtensionContext): Model<Api>[] {
 async function tryModel(
   ctx: ExtensionContext,
   spec: string,
-): Promise<{ model: Model<Api>; apiKey?: string; headers?: Record<string, string> } | undefined> {
+): Promise<{ model: Model<Api>; apiKey?: string; headers?: ProviderHeaders } | undefined> {
   const parsed = parseSpec(spec);
   if (!parsed) return undefined;
   const model = ctx.modelRegistry.find(parsed.provider, parsed.id);

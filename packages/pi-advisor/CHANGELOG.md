@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.7 - 2026-08-13
+
+### Changed
+
+- Raise the Pi peer dependency minimum to 0.84.1 and verify compatibility with that release.
+- Accept Pi 0.84.1 provider headers that suppress defaults with `null` values.
+- Refresh the repository lockfile to remove known dependency vulnerabilities.
+
 ## 0.1.6 - 2026-07-21
 
 ### Changed

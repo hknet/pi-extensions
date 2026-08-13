@@ -1,6 +1,6 @@
 # pi-set-model
 
-Remembers Pi's selected model and thinking level for each project folder. Requires pi `>=0.81.1`.
+Remembers Pi's selected model and thinking level for each project folder. Requires pi `>=0.84.1`.
 
 After selecting a model and thinking level, explicitly save that combination for the current working directory with `/set-model set`. New Pi sessions opened in that directory restore it, rather than retaining the model selected in another project. Later `/model` or thinking changes do not modify the saved preference unless you run `/set-model set` again.
 

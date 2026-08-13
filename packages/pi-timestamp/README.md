@@ -1,6 +1,6 @@
 # pi-timestamp
 
-Shows timestamps for user input and agent completion timing. Requires pi `>=0.81.1`.
+Shows timestamps for user input and agent completion timing. Requires pi `>=0.84.1`.
 
 ## What it does
 

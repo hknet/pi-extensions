@@ -1,6 +1,6 @@
 {
   "name": "@hk_net/pi-thinking-command",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Pi extension that adds a /thinking slash command for changing reasoning level",
   "type": "module",
   "private": false,
@@ -26,8 +26,8 @@
     "README.md"
   ],
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.81.1",
-    "@earendil-works/pi-tui": ">=0.81.1"
+    "@earendil-works/pi-coding-agent": ">=0.84.1",
+    "@earendil-works/pi-tui": ">=0.84.1"
   },
   "pi": {
     "extensions": [
