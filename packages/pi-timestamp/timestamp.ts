@@ -1,3 +1,6 @@
+// Copyright © 2026 kapper.net - KAPPER NETWORK-COMMUNICATIONS GmbH
+// SPDX-License-Identifier: EUPL-1.2
+
 /**
  * Timestamp Extension
  *

@@ -1,6 +1,6 @@
 {
   "name": "pi-extensions",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Pi agent extensions: advisor, thinking command, timestamps, and per-project model preferences",
   "type": "module",
   "private": true,
@@ -13,7 +13,10 @@
     "extension"
   ],
   "license": "EUPL-1.2",
-  "author": "hknet",
+  "author": {
+    "name": "KAPPER NETWORK-COMMUNICATIONS GmbH",
+    "url": "https://kapper.net"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/hknet/pi-extensions.git"

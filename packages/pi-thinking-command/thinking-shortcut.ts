@@ -1,3 +1,6 @@
+// Copyright © 2026 kapper.net - KAPPER NETWORK-COMMUNICATIONS GmbH
+// SPDX-License-Identifier: EUPL-1.2
+
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import type { Api, Model, ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";

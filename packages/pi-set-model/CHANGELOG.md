@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.5 - 2026-08-23
+
+### Changed
+
+- Add the copyright holder and EUPL licensing notice to the package license and canonical TypeScript source.
+- Identify KAPPER NETWORK-COMMUNICATIONS GmbH and kapper.net in the npm author metadata.
+
 ## 0.1.4 - 2026-08-23
 
 ### Changed

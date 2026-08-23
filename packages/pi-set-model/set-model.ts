@@ -1,3 +1,6 @@
+// Copyright © 2026 kapper.net - KAPPER NETWORK-COMMUNICATIONS GmbH
+// SPDX-License-Identifier: EUPL-1.2
+
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { clampThinkingLevel } from "@earendil-works/pi-ai";

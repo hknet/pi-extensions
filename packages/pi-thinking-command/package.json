@@ -1,6 +1,6 @@
 {
   "name": "@hk_net/pi-thinking-command",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Pi extension that adds a /thinking slash command for changing reasoning level",
   "type": "module",
   "private": false,
@@ -11,7 +11,10 @@
     "thinking"
   ],
   "license": "EUPL-1.2",
-  "author": "hknet",
+  "author": {
+    "name": "KAPPER NETWORK-COMMUNICATIONS GmbH",
+    "url": "https://kapper.net"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/hknet/pi-extensions.git",

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.5 - 2026-08-23
+
+### Changed
+
+- Add the copyright holder and EUPL licensing notice to the bundle and package license files, and add copyright/SPDX headers to every canonical TypeScript source.
+- Identify KAPPER NETWORK-COMMUNICATIONS GmbH and kapper.net in the root and workspace npm author metadata.
+- Keep Dependabot major updates for TypeScript and Node declarations aligned with the versions validated by the pinned Pi SDK.
+
 ## 0.3.4 - 2026-08-23
 
 ### Changed
