@@ -128,23 +128,17 @@ export function formatRuntimeDuration(ms: number): string {
     return parts.filter((part): part is string => part !== undefined).join(" ");
 }
 
-function isTimeoutErrorMessage(message: string | undefined): boolean {
-    return /timed? out|timeout/i.test(message ?? "");
-}
-
 export default function (pi: ExtensionAPI) {
     let taskStartTime: number | undefined;
-    let waitingForRetryAfterTimeout = false;
 
     function notifyAccent(ctx: ExtensionContext, message: string): void {
         ctx.ui.notify(ctx.ui.theme.fg("accent", message), "info");
     }
 
-    // Track when the agent starts processing. If Pi is auto-retrying after a timeout,
-    // keep the original start time so the eventual completion covers the full task.
+    // Track the complete run. Automatic retries and compaction recovery can emit
+    // additional agent_start events before agent_settled, so retain the first start.
     pi.on("agent_start", async () => {
-        if (waitingForRetryAfterTimeout) return;
-        taskStartTime = Date.now();
+        taskStartTime ??= Date.now();
     });
 
     // Show "Sent HH:MM:SS" after each user message.
@@ -153,33 +147,17 @@ export default function (pi: ExtensionAPI) {
     pi.on("message_end", async (event, ctx) => {
         if (event.message.role !== "user") return;
 
-        if (waitingForRetryAfterTimeout) {
-            taskStartTime = undefined;
-            waitingForRetryAfterTimeout = false;
-        }
-
         const ts = event.message.timestamp;
         if (!ts) return;
 
         ctx.ui.notify(`Sent ${formatTime(ts)}`, "info");
     });
 
-    // Show completion timing after the whole task finishes. If Pi ended this agent loop
-    // with a timeout error and will likely auto-retry, wait for the later completion.
-    pi.on("agent_end", async (event, ctx) => {
-        const lastAssistantMessage = [...event.messages].reverse().find((message) => message.role === "assistant");
-        if (
-            lastAssistantMessage?.role === "assistant" &&
-            lastAssistantMessage.stopReason === "error" &&
-            isTimeoutErrorMessage(lastAssistantMessage.errorMessage)
-        ) {
-            waitingForRetryAfterTimeout = true;
-            return;
-        }
-
+    // Show completion timing only after retries, compaction recovery, and queued
+    // continuations have fully settled.
+    pi.on("agent_settled", async (_event, ctx) => {
         const startTime = taskStartTime;
         taskStartTime = undefined;
-        waitingForRetryAfterTimeout = false;
 
         if (startTime === undefined) return;
 

@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { clampThinkingLevel } from "@earendil-works/pi-ai";
 import { CONFIG_DIR_NAME, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
@@ -38,10 +39,13 @@ export async function loadPreference(path: string): Promise<ProjectPreference | 
     const preference = parsed as Partial<ProjectPreference>;
     if (
       typeof preference.provider !== "string" ||
+      preference.provider.trim() === "" ||
       typeof preference.model !== "string" ||
-      typeof preference.thinkingLevel !== "string"
+      preference.model.trim() === "" ||
+      typeof preference.thinkingLevel !== "string" ||
+      preference.thinkingLevel.trim() === ""
     ) {
-      throw new Error("expected provider, model, and thinkingLevel");
+      throw new Error("expected non-empty provider, model, and thinkingLevel strings");
     }
     return preference as ProjectPreference;
   } catch (error: unknown) {
@@ -160,15 +164,19 @@ export default function setModelExtension(pi: ExtensionAPI) {
       ctx.ui.notify(`No API key for project model: ${preference.provider}/${preference.model}`, "warning");
       return;
     }
-    pi.setThinkingLevel(preference.thinkingLevel);
+    const restoredThinkingLevel = clampThinkingLevel(model, preference.thinkingLevel);
+    pi.setThinkingLevel(restoredThinkingLevel);
     modelBeforeProjectPreference = previousModel;
     thinkingBeforeProjectPreference = previousThinkingLevel;
 
-    if (modelChanged) {
+    if (modelChanged || restoredThinkingLevel !== preference.thinkingLevel) {
       ctx.ui.notify(
         ctx.ui.theme.fg(
           "accent",
-          `Project model restored: ${preference.provider}/${preference.model} · thinking: ${pi.getThinkingLevel()}`,
+          `Project model restored: ${preference.provider}/${preference.model} · thinking: ${pi.getThinkingLevel()}` +
+            (restoredThinkingLevel !== preference.thinkingLevel
+              ? ` (saved level ${preference.thinkingLevel} is unsupported)`
+              : ""),
         ),
         "info",
       );

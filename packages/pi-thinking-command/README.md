@@ -1,12 +1,14 @@
 # `/thinking` command extension for pi
 
-Adds a `/thinking` slash command to pi `>=0.84.1` for changing the active thinking/reasoning level from inside a session.
+Adds a `/thinking` slash command to Pi 0.84.1 or newer (tested with the current Pi 0.84.2 release) for changing the active thinking/reasoning level from inside a session.
 
 Normally in pi, changing the thinking/reasoning level means opening the settings menu, navigating to **Thinking**, and selecting the requested level. This extension is a convenience shortcut for that workflow, so you can switch levels directly with commands such as `/thinking low` or `/thinking xhigh`.
 
 This is especially useful when switching between model classes. Smaller models, including many local models, often benefit from tighter thinking limits than larger hosted models from major providers.
 
 ## Install
+
+> **Avoid duplicate installation.** Install this npm package or the GitHub bundle, not both. Loading both copies can duplicate commands, autocomplete providers, and status updates.
 
 Install just this extension from npm:
 
@@ -36,8 +38,10 @@ After installing, restart pi or run:
 ## Usage
 
 ```text
-/thinking [off|minimal|low|medium|high|xhigh|max]
+/thinking [level]
 ```
+
+Autocomplete offers only the thinking levels supported by the active model.
 
 Examples:
 
@@ -50,7 +54,7 @@ Examples:
 /thinking max
 ```
 
-If no argument is provided, `/thinking` sets the level to `medium`.
+If no argument is provided, `/thinking` sets the level to `medium` when supported, otherwise to the model's first supported level (normally `off` for a non-reasoning model).
 
 ## Levels
 
@@ -62,17 +66,16 @@ If no argument is provided, `/thinking` sets the level to `medium`.
 - `xhigh` — very high reasoning budget
 - `max` — maximum reasoning budget
 
-> **Note:** If the current model does not support the requested level, pi clamps to the
-> nearest supported level (searching both up and down the level hierarchy).
+> **Note:** `/thinking` rejects levels that the active model does not support instead of silently selecting a different level.
 
 ## Features
 
 - Registers the `/thinking` command.
-- Provides argument completions for all supported levels.
-- Autocompletes `/th...` to `/thinking` without Pi's trailing-space insertion, then presents the level picker.
+- Derives argument completions from Pi's model-specific capabilities and refreshes them when the active model changes.
+- Autocompletes `/th...` to `/thinking` without Pi's trailing-space insertion; press Tab again to open the level picker.
 - Shows a `thinking` status item with the current level.
 - Updates the status item when the thinking level changes.
-- Validates input and displays an error for unknown levels.
+- Validates input and displays an error for unknown or model-incompatible levels.
 
 ## Issues and feedback
 

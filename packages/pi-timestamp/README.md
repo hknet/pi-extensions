@@ -1,6 +1,6 @@
 # pi-timestamp
 
-Shows timestamps for user input and agent completion timing. Requires pi `>=0.84.1`.
+Shows timestamps for user input and agent completion timing. Requires Pi 0.84.1 or newer (tested with the current Pi 0.84.2 release).
 
 ## What it does
 
@@ -16,6 +16,8 @@ Timestamps appear inline in the **chat display**, similar to Pi's built-in tool 
 
 ## Installation
 
+> **Avoid duplicate installation.** Install this npm package or the GitHub bundle, not both. Loading both copies can duplicate timestamps and runtime summaries.
+
 ```bash
 pi install npm:@hk_net/pi-timestamp
 ```
@@ -29,7 +31,7 @@ cp packages/pi-timestamp/timestamp.ts ~/.pi/agent/extensions/timestamp.ts
 
 ## Duration measurement
 
-Captured from `agent_start` (when the model starts processing) to `agent_end` (when all tool calls and model processing are done).
+Captured from the first `agent_start` to `agent_settled`, so automatic retries, compaction recovery, tool calls, and queued continuations are included in one complete task duration.
 
 ## Issues and feedback
 

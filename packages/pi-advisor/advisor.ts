@@ -44,7 +44,7 @@ import { getSupportedThinkingLevels, Type } from "@earendil-works/pi-ai";
 import type { Api, Model, ModelThinkingLevel, ProviderHeaders } from "@earendil-works/pi-ai";
 import { complete } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
+import { CONFIG_DIR_NAME, getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, SelectList, truncateToWidth } from "@earendil-works/pi-tui";
 import type { AutocompleteItem, Component } from "@earendil-works/pi-tui";
 import * as fs from "node:fs";
@@ -193,19 +193,28 @@ tool outputs, file contents, command output, or other transcript excerpts unless
 are directly relevant to reviewing the coding agent's work. Do not quote secrets or
 credentials unless strictly necessary to identify a concrete issue.
 
+First infer the checkpoint: evidence gathering or plan review, recovery from a
+concrete failure, or completion review. Judge the work appropriate to that checkpoint.
+If the transcript is too early to support a useful review, say that plainly and name
+the specific evidence the agent should gather next; do not invent a verdict.
+
 Give direct, high-signal advice. Specifically:
+- Check the user's actual goal, repository instructions, primary-source API evidence,
+  and existing project patterns before endorsing the approach.
 - If the agent is about to build on a wrong assumption, a misread of a file, or a
   flawed interpretation of the request, say so plainly and point at the evidence.
 - If the approach is sound, confirm it and name the one or two things most likely to
   bite — edge cases, missed requirements, or unverified claims.
-- If the agent thinks it is done, scrutinize that: is there a requirement left unmet,
-  a claim asserted but not verified, a test that doesn't actually test the change?
+- If the agent thinks it is done, scrutinize the actual changes and verification: is
+  a requirement left unmet, a claim unverified, or a test not exercising the behavior?
+  Do not manufacture unrelated scope or demand changes unsupported by the task.
 - Prefer concrete next actions over generic best-practice lectures. Cite specific
-  files, functions, or transcript moments.
+  files, functions, commands, or transcript moments.
 
-Be concise and decisive. You are the more capable model in the room — act like it.
-Do not restate the transcript back; the agent already has it. Lead with your verdict.
-Always return your advice as visible assistant text. Do not return reasoning-only output.`;
+Be concise and decisive. Lead with a one-sentence verdict, followed by at most three
+prioritized actions. If no corrective action is needed, say the work is ready and name
+only any final verification still warranted. Do not restate the transcript back; the
+agent already has it. Always return visible assistant text, never reasoning-only output.`;
 
 // ── Config files ────────────────────────────────────────────────────────────
 
@@ -218,7 +227,14 @@ type AdvisorConfig = {
 };
 
 const globalConfigPath = () => path.join(os.homedir(), ".pi", "agent", "advisor.json");
-const projectConfigPath = (cwd: string) => path.join(cwd, ".pi", "advisor.json");
+const projectConfigPath = (cwd: string) => path.join(cwd, CONFIG_DIR_NAME, "advisor.json");
+
+const PROJECT_SCOPE = "This folder (project)";
+const GLOBAL_SCOPE = "Global (all projects)";
+
+export function getAdvisorScopeChoices(projectTrusted: boolean): string[] {
+  return projectTrusted ? [PROJECT_SCOPE, GLOBAL_SCOPE] : [GLOBAL_SCOPE];
+}
 
 export function validateAdvisorConfig(raw: unknown, source = "advisor config"): AdvisorConfig {
   const warn = (message: string) => console.warn(`[pi-advisor] Ignoring invalid ${source}: ${message}`);
@@ -282,7 +298,14 @@ function writeConfig(file: string, cfg: AdvisorConfig): void {
   if (cfg.onDone !== undefined) clean.onDone = cfg.onDone;
   if (cfg.whenStuck !== undefined) clean.whenStuck = cfg.whenStuck;
   if (cfg.timeoutMs !== undefined) clean.timeoutMs = cfg.timeoutMs;
-  fs.writeFileSync(file, JSON.stringify(clean, null, 2) + "\n", "utf-8");
+
+  const temporaryFile = `${file}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    fs.writeFileSync(temporaryFile, JSON.stringify(clean, null, 2) + "\n", { encoding: "utf-8", mode: 0o600 });
+    fs.renameSync(temporaryFile, file);
+  } finally {
+    fs.rmSync(temporaryFile, { force: true });
+  }
 }
 
 // ── Resolution ──────────────────────────────────────────────────────────────
@@ -797,14 +820,16 @@ export default function advisorExtension(pi: ExtensionAPI) {
     label: "Advisor",
     description:
       "Consult a configured stronger reviewer model that sees your full conversation transcript. " +
-      "Takes NO parameters — if a reviewer model is configured, the entire active conversation " +
-      "(your task, reasoning, every tool call and result) is forwarded automatically. " +
-      "If no reviewer model is configured, this sends nothing and returns setup guidance. " +
-      "Returns direct, actionable advice.",
-    promptSnippet: "Consult a configured stronger reviewer model on the full transcript before/after substantive work",
+      "Use it only after the transcript contains substantive investigation, an evidence-backed plan, " +
+      "implementation work, or a concrete failure to review; do not call it as the first action. " +
+      "Takes NO parameters — if configured, the entire active conversation (task, reasoning, tool calls, " +
+      "and results) is forwarded automatically. If unconfigured, it sends nothing and returns setup guidance.",
+    promptSnippet: "Mandatory evidence-based review checkpoint for non-trivial work; never the first action",
     promptGuidelines: [
-      "Call advisor before substantive work (before writing, before committing to an interpretation or assumption), when stuck (errors recurring, approach not converging), and when you believe the task is complete.",
-      "advisor takes no arguments; if no reviewer model is configured, it sends nothing and returns setup guidance. Otherwise it forwards the whole conversation. Give its advice serious weight, but if a concrete step it suggests fails empirically or contradicts primary-source evidence you hold, adapt rather than follow blindly.",
+      "For every non-trivial task, you MUST call advisor at a useful checkpoint: after investigating enough context to form an evidence-backed approach and before the first consequential edit, when concrete failures recur or the approach stops converging, or after implementation and verification before claiming completion.",
+      "Before giving a final answer on any non-trivial task, verify that you called advisor at least once after gathering substantive evidence. If you have not, call advisor now and incorporate its result; do not finish the task without this review.",
+      "Never call advisor as the first action, merely to restate the user's request, or while the transcript contains no substantive evidence or work for a reviewer to assess. Trivial questions and mechanical edits do not require advisor.",
+      "advisor takes no arguments; if no reviewer model is configured, it sends nothing and returns setup guidance. Otherwise it forwards the whole conversation. Give its advice serious weight, but adapt when a suggestion fails empirically or contradicts primary-source evidence.",
     ],
     parameters: Type.Object({}),
     async execute(_toolCallId, _params, signal, onUpdate, ctx) {
@@ -871,8 +896,9 @@ export default function advisorExtension(pi: ExtensionAPI) {
     }
   });
 
-  // "On done": when the agent finishes, review and (if enabled) steer one follow-up.
-  pi.on("agent_end", async (_event, ctx) => {
+  // "On done": after retries, compaction recovery, and queued continuations have
+  // fully settled, review and (if enabled) steer one follow-up.
+  pi.on("agent_settled", async (_event, ctx) => {
     const projectTrusted = contextProjectTrusted(ctx);
     const { onDone } = effectiveTriggers(ctx.cwd, projectTrusted);
     if (!onDone || autoReviewedThisRound || autoRunning || isDisabled(ctx.cwd, projectTrusted) || isUnconfigured(ctx.cwd, projectTrusted)) return;
@@ -996,11 +1022,13 @@ export default function advisorExtension(pi: ExtensionAPI) {
       }
 
       const pickScope = async (): Promise<string | undefined> => {
-        const PROJECT_OPT = "This folder (project)";
-        const GLOBAL_OPT = "Global (all projects)";
-        const scope = await ctx.ui.select("Apply to", [PROJECT_OPT, GLOBAL_OPT]);
+        const projectTrusted = contextProjectTrusted(ctx);
+        if (!projectTrusted) {
+          ctx.ui.notify("Project advisor settings cannot be changed until this project is trusted; only global scope is available.", "warning");
+        }
+        const scope = await ctx.ui.select("Apply to", getAdvisorScopeChoices(projectTrusted));
         if (scope === undefined) return undefined;
-        return scope === PROJECT_OPT ? projectConfigPath(cwd) : globalConfigPath();
+        return scope === PROJECT_SCOPE ? projectConfigPath(cwd) : globalConfigPath();
       };
       const persist = (file: string, patch: AdvisorConfig) => {
         writeConfig(file, { ...readConfig(file), ...patch });

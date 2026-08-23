@@ -1,8 +1,10 @@
 # pi-extensions
 
+[![CI](https://github.com/hknet/pi-extensions/actions/workflows/ci.yml/badge.svg)](https://github.com/hknet/pi-extensions/actions/workflows/ci.yml)
+
 Collection of [pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) extensions — small, self-contained plugins that add tools, commands, and automatic behaviors to the pi coding agent.
 
-Requires pi `>= 0.84.1` for the current release.
+Requires Pi 0.84.1 or newer (tested with the current Pi 0.84.2 release).
 
 ## Extensions
 
@@ -14,6 +16,8 @@ Requires pi `>= 0.84.1` for the current release.
 | [**pi-set-model**](./packages/pi-set-model/) | Remembers the selected model and thinking level separately for each project folder. |
 
 ## Installation
+
+> **Choose one installation method.** Install either the GitHub bundle or individual npm packages, not both. Loading the same extension from both sources can duplicate commands, tools, event handlers, and UI output.
 
 ### Via `pi install` from GitHub (bundle)
 
@@ -70,6 +74,7 @@ cp packages/pi-set-model/set-model.ts ~/.pi/agent/extensions/set-model.ts
 pi-extensions/
 ├── package.json               # Pi package manifest
 ├── README.md
+├── CHANGELOG.md               # GitHub bundle release history
 ├── packages/
 │   ├── pi-advisor/
 │   │   ├── package.json       # npm package @hk_net/pi-advisor

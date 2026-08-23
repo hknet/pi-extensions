@@ -1,6 +1,6 @@
 # pi-advisor
 
-A [pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) extension for pi `>=0.84.1` that offers a
+A [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) extension for Pi 0.84.1 or newer (tested with the current Pi 0.84.2 release) that offers a
 parameterless `advisor` tool — inspired by Claude Code's advisor, but expanded with additional
 nudges and a manual review procedure. The regular model calls `advisor` to get a second opinion
 from an explicitly configured **stronger reviewer model** that sees the *entire* conversation transcript. Beyond the
@@ -11,23 +11,32 @@ or finishes a task, and the human can invoke a manual review via `/advise`.
 
 When the model calls `advisor` (no arguments), the extension serializes the full active branch —
 user/assistant text, assistant **reasoning**, every **tool call (with args)** and its **result** —
-and forwards it to a stronger reviewer model with a reviewer system prompt. The reviewer returns
-direct, actionable advice (flag wrong assumptions, name what's likely to bite, scrutinize "I'm
-done" claims). Individual tool-call arguments are truncated at 800 characters and tool results at
+and forwards it to a stronger reviewer model with a reviewer system prompt. The reviewer infers whether it is assessing a plan,
+a concrete failure, or claimed completion; checks the work against user and repository instructions
+and primary-source evidence; and returns a verdict plus at most three prioritized actions. A
+premature consultation asks for the specific missing evidence instead of inventing a verdict.
+Individual tool-call arguments are truncated at 800 characters and tool results at
 2,000 characters so huge outputs do not dominate the review; after that, the transcript is truncated
 oldest-first only if it would overflow the reviewer's context window.
 
 Beyond the callable tool, the extension provides two additional ways to get advice:
 
-- **Automatic nudges** — the tool's `promptGuidelines` encourage the model to call advisor
-  *before substantive work*, *when stuck*, and *when it believes the task is complete*. Two
-  opt-in deterministic triggers (`onDone`, `whenStuck`) go further: they auto-consult the
-  reviewer and inject the feedback directly into the conversation so the agent sees it.
+- **Automatic nudges** — the tool's `promptGuidelines` tell the model to call advisor at a
+  useful checkpoint in every non-trivial task: after enough investigation to form an
+  evidence-backed approach and before a consequential edit, when stuck, or after implementation
+  and verification before claiming completion. A mandatory pre-final check tells the model not to
+  finish non-trivial work unless it has called advisor at least once after gathering evidence.
+  The guidance explicitly prohibits an advisor call as the first action or while there is no
+  substantive evidence or work to review. Two opt-in
+  deterministic triggers (`onDone`, `whenStuck`) go further: they auto-consult the reviewer and
+  inject the feedback directly into the conversation so the agent sees it.
 - **Manual review via `/advise`** — the human can invoke a one-off review at any time. Feedback
   can be shown UI-only (informal, for the human), piped into the chat as a user message, or
   injected as a steering message so the running agent sees and acts on it.
 
 ## Files & install
+
+> **Avoid duplicate installation.** Install this npm package or the GitHub bundle, not both. Loading both copies can duplicate tools, commands, and automatic event handlers.
 
 - `advisor.ts` — canonical source (this repo).
 - Package-installed copy: loaded from this package's `pi.extensions` manifest after `pi install`.
@@ -118,8 +127,9 @@ Autocomplete completes `/adviso...` to `/advisor` without Pi's trailing-space in
 Default **off** — out of the box the regular model decides when to call `advisor`, nudged by the
 tool's `promptGuidelines`. Two opt-in deterministic triggers, configurable per project and global:
 
-- **`onDone`** — on `agent_end`, auto-review and steer one follow-up so the agent addresses any
-  issues before truly stopping (guarded to at most once per user prompt).
+- **`onDone`** — on `agent_settled`, after automatic retries, compaction recovery, and queued
+  continuations finish, auto-review and steer one follow-up so the agent addresses any issues
+  before truly stopping (guarded to at most once per user prompt).
 - **`whenStuck: N`** — after N consecutive tool errors **or** N repeated identical tool calls
   (same tool name + same arguments), auto-consult the reviewer and inject the advice as a
   steering message to get unstuck.
@@ -131,7 +141,8 @@ tool's `promptGuidelines`. Two opt-in deterministic triggers, configurable per p
   another model.
 - **Project config follows pi project trust.** A global install ignores `<cwd>/.pi/advisor.json`
   while the current project is untrusted, so an untrusted checkout cannot silently choose a reviewer
-  model or enable auto-triggers.
+  model or enable auto-triggers. `/advisor` also withholds the project scope from its configuration
+  picker until the project is trusted; global configuration remains available.
 - **Auto-triggers are off by default.** The `onDone` and `whenStuck` features must be explicitly
   enabled in configuration, and they do nothing unless a reviewer model is configured.
 - **Data sent to the reviewer model.** When `advisor` is called, the extension sends the full

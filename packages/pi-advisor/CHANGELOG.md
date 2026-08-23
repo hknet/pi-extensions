@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.8 - 2026-08-23
+
+### Changed
+
+- Mark Pi's host-provided SDK packages as optional wildcard peers so npm does not install a redundant Pi SDK dependency tree.
+- Verify development and tests against Pi SDK 0.84.2 while retaining runtime compatibility with Pi 0.84.1 and newer.
+- Refine advisor tool guidance so non-trivial tasks require a review at an evidence-backed checkpoint before the final answer without encouraging an immediate first-action call.
+- Make reviewer responses checkpoint-aware, evidence-grounded, and limited to a verdict plus three prioritized actions.
+- Prevent `/advisor` from writing project-scoped configuration until Pi trusts the project.
+- Run `onDone` review only after Pi fully settles retries, compaction recovery, and queued continuations.
+- Write advisor configuration atomically with owner-only file permissions where supported.
+- Document that the individual package and GitHub bundle must not be installed together.
+
 ## 0.1.7 - 2026-08-13
 
 ### Changed

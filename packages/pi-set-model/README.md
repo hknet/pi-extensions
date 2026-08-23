@@ -1,12 +1,14 @@
 # pi-set-model
 
-Remembers Pi's selected model and thinking level for each project folder. Requires pi `>=0.84.1`.
+Remembers Pi's selected model and thinking level for each project folder. Requires Pi 0.84.1 or newer (tested with the current Pi 0.84.2 release).
 
 After selecting a model and thinking level, explicitly save that combination for the current working directory with `/set-model set`. New Pi sessions opened in that directory restore it, rather than retaining the model selected in another project. Later `/model` or thinking changes do not modify the saved preference unless you run `/set-model set` again.
 
 Preferences are stored in the project at `.pi/set-model.json`; they are never shared with another project. Pi must trust the project before the extension reads or writes this project-local setting.
 
 ## Install
+
+> **Avoid duplicate installation.** Install this npm package or the GitHub bundle, not both. Loading both copies can duplicate commands and preference-restoration handlers.
 
 ```bash
 pi install npm:pi-set-model
@@ -31,7 +33,7 @@ Autocomplete completes `/setm...` to `/set-model` without adding a trailing spac
 
 The folder is Pi's current working directory. Run Pi from the project root when you want one preference for the whole project. The setting is saved at `<cwd>/.pi/set-model.json`.
 
-If the saved model is unavailable or has no configured API key, Pi keeps the active model and shows a warning. Thinking levels are restored after the model and are clamped to that model's supported levels by Pi. When the session ends, the model and thinking level that were active before the project preference was applied are restored.
+If the saved model is unavailable or has no configured API key, Pi keeps the active model and shows a warning. Empty or malformed preference fields are ignored. Thinking levels are restored after the model and explicitly clamped with Pi's model-capability helper; the restore notice identifies an unsupported saved level. When the session ends, the model and thinking level that were active before the project preference was applied are restored.
 
 ## Issues and feedback
 

@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
+import setModelExtension, {
   ACTIONS,
   getActionCompletions,
   isSetModelCommandPrefix,
   loadPreference,
   savePreference,
 } from "../packages/pi-set-model/set-model.js";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 test("set-model autocomplete exposes only view, set, and clear", () => {
   assert.equal(isSetModelCommandPrefix("/setm"), true);
@@ -17,6 +18,68 @@ test("set-model autocomplete exposes only view, set, and clear", () => {
   assert.equal(isSetModelCommandPrefix("/set"), false);
   assert.deepEqual(ACTIONS.map((action) => action.value), ["view", "set", "clear"]);
   assert.deepEqual(getActionCompletions("c")?.map((item) => item.value), ["clear"]);
+});
+
+test("set-model rejects malformed or empty preferences", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-set-model-invalid-"));
+  const preferenceFile = join(directory, ".pi", "set-model.json");
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    await savePreference(preferenceFile, { provider: "", model: "test-model", thinkingLevel: "high" });
+    assert.equal(await loadPreference(preferenceFile), undefined);
+  } finally {
+    console.error = originalError;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("set-model clamps a saved thinking level to the restored model", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-set-model-restore-"));
+  const preferenceFile = join(directory, ".pi", "set-model.json");
+  await savePreference(preferenceFile, { provider: "test-provider", model: "test-model", thinkingLevel: "max" });
+
+  const handlers = new Map<string, Array<(event: any, ctx: any) => unknown>>();
+  const notifications: string[] = [];
+  let thinkingLevel = "off";
+  const pi = {
+    on(event: string, handler: (event: any, ctx: any) => unknown) {
+      handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+    },
+    registerCommand() {},
+    getThinkingLevel: () => thinkingLevel,
+    setThinkingLevel: (level: string) => { thinkingLevel = level; },
+    setModel: async () => true,
+  } as unknown as ExtensionAPI;
+  setModelExtension(pi);
+
+  const savedModel = {
+    provider: "test-provider",
+    id: "test-model",
+    reasoning: true,
+    thinkingLevelMap: { xhigh: null, max: null },
+  };
+  const ctx = {
+    cwd: directory,
+    model: { provider: "previous", id: "previous-model" },
+    isProjectTrusted: () => true,
+    modelRegistry: { find: () => savedModel },
+    ui: {
+      addAutocompleteProvider: () => {},
+      notify: (message: string) => notifications.push(message),
+      theme: { fg: (_color: string, message: string) => message },
+    },
+  };
+
+  try {
+    for (const handler of handlers.get("session_start") ?? []) {
+      await handler({ type: "session_start", reason: "startup" }, ctx);
+    }
+    assert.equal(thinkingLevel, "high");
+    assert.match(notifications[0] ?? "", /saved level max is unsupported/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("set-model preferences persist locally and can be read back", async () => {

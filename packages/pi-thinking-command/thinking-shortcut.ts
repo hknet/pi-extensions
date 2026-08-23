@@ -1,9 +1,9 @@
+import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
+import type { Api, Model, ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
-type ThinkingLevel = Parameters<ExtensionAPI["setThinkingLevel"]>[0];
-
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const satisfies readonly ThinkingLevel[];
+type ThinkingLevel = ModelThinkingLevel;
 
 const THINKING_LEVEL_DESCRIPTIONS: Record<ThinkingLevel, string> = {
   off: "Disable extended thinking",
@@ -15,14 +15,20 @@ const THINKING_LEVEL_DESCRIPTIONS: Record<ThinkingLevel, string> = {
   max: "Maximum reasoning budget",
 };
 
-export function normalizeThinkingLevel(input: string): ThinkingLevel | undefined {
+export function normalizeThinkingLevel(
+  input: string,
+  supportedLevels: readonly ThinkingLevel[],
+): ThinkingLevel | undefined {
   const normalized = input.toLowerCase().trim();
-  return THINKING_LEVELS.find((level) => level === normalized);
+  return supportedLevels.find((level) => level === normalized);
 }
 
-export function getThinkingLevelCompletions(prefix: string): AutocompleteItem[] | null {
+export function getThinkingLevelCompletions(
+  prefix: string,
+  supportedLevels: readonly ThinkingLevel[],
+): AutocompleteItem[] | null {
   const normalizedPrefix = prefix.toLowerCase().trimStart();
-  const matches = THINKING_LEVELS.filter((level) => level.startsWith(normalizedPrefix));
+  const matches = supportedLevels.filter((level) => level.startsWith(normalizedPrefix));
 
   if (matches.length === 0) return null;
 
@@ -38,22 +44,37 @@ export function isThinkingCommandPrefix(value: string): boolean {
 }
 
 export default function thinkingShortcutExtension(pi: ExtensionAPI) {
+  let supportedLevels: ThinkingLevel[] = ["off"];
+
+  const updateSupportedLevels = (model: Model<Api> | undefined) => {
+    const resolved: ThinkingLevel[] = model ? getSupportedThinkingLevels(model) : ["off"];
+    supportedLevels = resolved.length > 0 ? resolved : ["off"];
+  };
+
   pi.on("session_start", (_event, ctx) => {
+    updateSupportedLevels(ctx.model);
     ctx.ui.addAutocompleteProvider((current) => ({
       async getSuggestions(lines, cursorLine, cursorCol, options) {
         const line = lines[cursorLine] ?? "";
         const beforeCursor = line.slice(0, cursorCol);
         if (cursorCol === line.length && isThinkingCommandPrefix(beforeCursor)) {
           if (beforeCursor === "/thinking") {
-            return { prefix: "", items: getThinkingLevelCompletions("") ?? [] };
+            return { prefix: "", items: getThinkingLevelCompletions("", supportedLevels) ?? [] };
           }
           return {
             prefix: beforeCursor,
             items: [{ value: "thinking", label: "thinking", description: "Set the thinking level" }],
           };
         }
-        if (beforeCursor === "/thinking ") {
-          return { prefix: "", items: getThinkingLevelCompletions("") ?? [] };
+        if (beforeCursor === "/thinking " && cursorCol === line.length) {
+          return { prefix: "", items: getThinkingLevelCompletions("", supportedLevels) ?? [] };
+        }
+
+        const match = beforeCursor.match(/^\/thinking\s+(\S*)$/);
+        if (match && cursorCol === line.length) {
+          const prefix = match[1] ?? "";
+          const items = getThinkingLevelCompletions(prefix, supportedLevels);
+          return items ? { prefix, items } : null;
         }
         return current.getSuggestions(lines, cursorLine, cursorCol, options);
       },
@@ -90,42 +111,16 @@ export default function thinkingShortcutExtension(pi: ExtensionAPI) {
       shouldTriggerFileCompletion(lines, cursorLine, cursorCol) {
         const line = lines[cursorLine] ?? "";
         const beforeCursor = line.slice(0, cursorCol);
-        if (
-          (isThinkingCommandPrefix(beforeCursor) || beforeCursor === "/thinking ") &&
-          cursorCol === line.length
-        ) return false;
+        if (/^\/thinking(?:\s+\S*)?$/.test(beforeCursor) && cursorCol === line.length) return false;
         return current.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? true;
       },
     }));
 
     ctx.ui.setStatus("thinking", `level: ${pi.getThinkingLevel()}`);
+  });
 
-    ctx.ui.addAutocompleteProvider((current) => ({
-      async getSuggestions(lines, cursorLine, cursorCol, options) {
-        const line = lines[cursorLine] ?? "";
-        const beforeCursor = line.slice(0, cursorCol);
-        const match = beforeCursor.match(/^\/thinking\s+(\S*)$/);
-
-        if (!match) {
-          return current.getSuggestions(lines, cursorLine, cursorCol, options);
-        }
-
-        const prefix = match[1] ?? "";
-        const items = getThinkingLevelCompletions(prefix);
-        return items ? { prefix, items } : null;
-      },
-
-      applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
-        return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
-      },
-
-      shouldTriggerFileCompletion(lines, cursorLine, cursorCol) {
-        const line = lines[cursorLine] ?? "";
-        const beforeCursor = line.slice(0, cursorCol);
-        if (/^\/thinking\s+\S*$/.test(beforeCursor)) return false;
-        return current.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? true;
-      },
-    }));
+  pi.on("model_select", (event) => {
+    updateSupportedLevels(event.model);
   });
 
   pi.on("thinking_level_select", (event, ctx) => {
@@ -133,22 +128,22 @@ export default function thinkingShortcutExtension(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("thinking", {
-    description: "Set the thinking level. Usage: /thinking [off|minimal|low|medium|high|xhigh|max]",
-    getArgumentCompletions: getThinkingLevelCompletions,
+    description: "Set the thinking level supported by the active model",
+    getArgumentCompletions: (prefix) => getThinkingLevelCompletions(prefix, supportedLevels),
     handler: async (args, ctx) => {
-      const input = args?.trim() || "medium";
-      const level = normalizeThinkingLevel(input);
+      updateSupportedLevels(ctx.model);
+      const input = args?.trim() || (supportedLevels.includes("medium") ? "medium" : supportedLevels[0] ?? "off");
+      const level = normalizeThinkingLevel(input, supportedLevels);
 
       if (!level) {
         ctx.ui.notify(
-          `Invalid level: "${input}". Valid options are: ${THINKING_LEVELS.join(", ")}.`,
+          `Thinking level "${input}" is not supported by the active model. Supported: ${supportedLevels.join(", ")}.`,
           "error",
         );
         return;
       }
 
       pi.setThinkingLevel(level);
-
       ctx.ui.notify(`Thinking level set to: ${pi.getThinkingLevel()}`, "info");
     },
   });

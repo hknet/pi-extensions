@@ -1,10 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
+import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import advisorExtension, {
   MAX_TOOL_CALL_ARGS_CHARS,
   MAX_TOOL_RESULT_CHARS,
   buildTranscript,
   getAdvisorCompletions,
+  getAdvisorScopeChoices,
   parseSpec,
   renderEntry,
   resolveAdviseMode,
@@ -111,6 +116,60 @@ test("advisor completions include subcommands and require a cached reviewer mode
 
   const whenStuck = getAdvisorCompletions("when-stuck ") ?? [];
   assert.deepEqual(whenStuck.find((item) => item.label === "1"), { value: "when-stuck 1", label: "1" });
+});
+
+test("advisor registers onDone after settlement and writes project config atomically", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-advisor-config-"));
+  const handlers = new Map<string, Array<(event: any, ctx: any) => unknown>>();
+  const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<unknown> }>();
+  let activeTools = ["advisor"];
+  const pi = {
+    on(event: string, handler: (event: any, ctx: any) => unknown) {
+      handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+    },
+    registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<unknown> }) {
+      commands.set(name, command);
+    },
+    registerTool() {},
+    registerMessageRenderer() {},
+    getActiveTools: () => activeTools,
+    setActiveTools: (tools: string[]) => { activeTools = tools; },
+  } as unknown as ExtensionAPI;
+  advisorExtension(pi);
+
+  assert.equal(handlers.has("agent_end"), false);
+  assert.equal(handlers.has("agent_settled"), true);
+
+  const ctx = {
+    cwd: directory,
+    hasUI: true,
+    isProjectTrusted: () => true,
+    modelRegistry: { refresh: () => {}, getAvailable: () => [] },
+    ui: {
+      select: async () => "This folder (project)",
+      notify: () => {},
+    },
+  };
+
+  try {
+    const advisor = commands.get("advisor");
+    assert.ok(advisor);
+    await advisor.handler("on-done on", ctx);
+    await advisor.handler("on-done off", ctx); // replace an existing file
+
+    const configDirectory = join(directory, ".pi");
+    assert.deepEqual(await readdir(configDirectory), ["advisor.json"]);
+    const configFile = join(configDirectory, "advisor.json");
+    assert.deepEqual(JSON.parse(await readFile(configFile, "utf8")), { onDone: false });
+    if (process.platform !== "win32") assert.equal((await stat(configFile)).mode & 0o077, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("advisor only offers global configuration for untrusted projects", () => {
+  assert.deepEqual(getAdvisorScopeChoices(false), ["Global (all projects)"]);
+  assert.deepEqual(getAdvisorScopeChoices(true), ["This folder (project)", "Global (all projects)"]);
 });
 
 test("resolveAdviseMode defaults to pipe when idle and steer when running", () => {

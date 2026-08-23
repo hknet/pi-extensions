@@ -1,0 +1,29 @@
+# Changelog
+
+## 0.3.4 - 2026-08-23
+
+### Changed
+
+- Mark Pi's host-provided SDK packages as optional wildcard peers across the bundle so npm installations do not pull in a redundant Pi runtime dependency tree.
+- Require Node.js 22.19.0 or newer for development and package installation, and verify compatibility against Pi SDK 0.84.2 while retaining Pi 0.84.1 runtime compatibility.
+- Derive `/thinking` validation and autocomplete choices from the active model's supported thinking levels, refresh them when the model changes, fall back safely when malformed custom metadata exposes no levels, and avoid intercepting mid-line completion.
+- Validate `pi-set-model` preferences more strictly and clamp restored thinking levels with Pi's model-capability helper.
+- Refine advisor guidance so non-trivial tasks require review at an evidence-backed checkpoint before the final answer without encouraging an immediate first-action call.
+- Make advisor reviews checkpoint-aware, evidence-grounded, and limited to a verdict plus three prioritized actions.
+- Run advisor `onDone` review and timestamp completion only after Pi fully settles automatic retries, compaction recovery, and queued continuations.
+- Write advisor configuration atomically with owner-only file permissions where supported.
+- Warn against installing the GitHub bundle alongside individual npm packages because duplicate extension loading can repeat commands, tools, handlers, and UI output.
+
+### Security
+
+- Prevent `/advisor` from offering or writing project-scoped configuration until Pi trusts the project, complementing the existing protection that ignores untrusted project configuration.
+- Make the root GitHub bundle private on npm to prevent accidental root publication.
+
+### Development
+
+- Add package-metadata regression tests for engines, optional Pi peers, publication safety, changelog inclusion, and immutable CI action pins.
+- Add event-level regression tests for advisor lifecycle/config writes, timestamp retry timing, thinking-model refresh, and set-model clamping.
+- Add continuous integration on Node.js 22.19.0 and 24 for typechecking and tests, plus audit and root/workspace package dry-runs.
+- Add manual CI dispatch, concurrency cancellation, job timeouts, a README status badge, and weekly Dependabot checks for npm and GitHub Actions.
+- Pin GitHub Actions dependencies to immutable commit SHAs.
+- Document staged npm publishing, human review and 2FA approval, named-workspace publishing, and the current Node.js requirement.

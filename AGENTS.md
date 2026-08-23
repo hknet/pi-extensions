@@ -1,5 +1,10 @@
 # Repository guidance
 
+## Session handover
+
+- Read `HANDOVER.md` before continuing an existing worktree task.
+- Keep it current while work is intentionally left uncommitted, and remove it once the handover is complete and the work has been committed or discarded.
+
 ## Before implementation
 
 - Confirm extension name, npm package name, slash-command names, storage location, and intended behavior with the user before writing code.
@@ -11,6 +16,7 @@
 
 - Keep each extension self-contained in `packages/<package>/` with its package manifest, README, LICENSE, and canonical TypeScript source.
 - Keep the root `package.json` `files` and `pi.extensions` manifests, workspace configuration, and TypeScript configuration in sync when adding an extension.
+- Declare Pi's host-provided SDK packages as `"*"` optional peers and keep exact current SDK versions only in root `devDependencies`; this prevents npm packages from installing redundant Pi runtime trees.
 - Preserve existing behavior unless the requested change explicitly alters it.
 - Add or update tests for every behavior change; test behavior rather than only implementation details.
 - Test an extension in isolation without loading installed extensions:
