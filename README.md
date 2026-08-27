@@ -4,16 +4,16 @@
 
 Collection of [pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) extensions — small, self-contained plugins that add tools, commands, and automatic behaviors to the pi coding agent.
 
-Requires Pi 0.84.1 or newer (tested with the current Pi 0.84.2 release).
+Requires Pi 0.84.1 or newer (tested with the current Pi 0.84.3 release).
 
 ## Extensions
 
 | Extension | Description |
 |---|---|
 | [**pi-advisor**](./packages/pi-advisor/) | A parameterless `advisor` tool that forwards the full conversation transcript to a stronger reviewer model for direct, actionable advice. |
-| [**pi-thinking-command**](./packages/pi-thinking-command/) | Adds a `/thinking` slash command for changing the active thinking/reasoning level from inside a session. |
+| [**pi-thinking-command**](./packages/pi-thinking-command/) | Adds a `/think` shortcut alongside Pi 0.84.3's native `/thinking` command. |
 | [**pi-timestamp**](./packages/pi-timestamp/) | Shows user/agent timestamps plus session-switch and full Pi-runtime summaries. |
-| [**pi-set-model**](./packages/pi-set-model/) | Remembers the selected model and thinking level separately for each project folder. |
+| [**pi-set-model**](./packages/pi-set-model/) | Remembers the selected model per project folder and keeps its saved thinking level synchronized with Pi. |
 
 ## Installation
 

@@ -18,6 +18,7 @@ test("thinking command uses the active model's supported levels", () => {
 
 test("thinking extension refreshes capabilities and exercises command/autocomplete behavior", async () => {
   const handlers = new Map<string, Array<(event: any, ctx: any) => unknown>>();
+  let commandName: string | undefined;
   let command: {
     getArgumentCompletions?: (prefix: string) => Array<{ value: string }> | null;
     handler: (args: string, ctx: any) => Promise<void>;
@@ -29,7 +30,8 @@ test("thinking extension refreshes capabilities and exercises command/autocomple
     on(event: string, handler: (event: any, ctx: any) => unknown) {
       handlers.set(event, [...(handlers.get(event) ?? []), handler]);
     },
-    registerCommand(_name: string, value: typeof command) {
+    registerCommand(name: string, value: typeof command) {
+      commandName = name;
       command = value;
     },
     getThinkingLevel: () => thinkingLevel,
@@ -50,6 +52,7 @@ test("thinking extension refreshes capabilities and exercises command/autocomple
     await handler({ type: "session_start", reason: "startup" }, ctx);
   }
 
+  assert.equal(commandName, "think");
   assert.deepEqual(
     command?.getArgumentCompletions?.("")?.map((item) => item.value),
     ["off", "minimal", "low", "medium", "high", "max"],
@@ -72,14 +75,14 @@ test("thinking extension refreshes capabilities and exercises command/autocomple
   const provider = autocompleteWrapper(baseProvider);
   const commandSuggestion = await provider.getSuggestions(["/th"], 0, 3, {});
   const completedCommand = provider.applyCompletion(["/th"], 0, 3, commandSuggestion.items[0], commandSuggestion.prefix);
-  assert.deepEqual(completedCommand, { lines: ["/thinking"], cursorLine: 0, cursorCol: 9 });
+  assert.deepEqual(completedCommand, { lines: ["/think"], cursorLine: 0, cursorCol: 6 });
 
-  const levelSuggestion = await provider.getSuggestions(["/thinking"], 0, 9, {});
+  const levelSuggestion = await provider.getSuggestions(["/think"], 0, 6, {});
   const low = levelSuggestion.items.find((item: { value: string }) => item.value === "low");
-  const completedLevel = provider.applyCompletion(["/thinking"], 0, 9, low, levelSuggestion.prefix);
-  assert.deepEqual(completedLevel, { lines: ["/thinking low"], cursorLine: 0, cursorCol: 13 });
+  const completedLevel = provider.applyCompletion(["/think"], 0, 6, low, levelSuggestion.prefix);
+  assert.deepEqual(completedLevel, { lines: ["/think low"], cursorLine: 0, cursorCol: 10 });
 
-  assert.equal(await provider.getSuggestions(["/thinking xyz"], 0, 10, {}), null);
+  assert.equal(await provider.getSuggestions(["/think xyz trailing"], 0, 10, {}), null);
   assert.equal(delegatedSuggestions, 1, "mid-line completion must delegate to Pi's base provider");
 
   const malformedModel = {
@@ -92,8 +95,9 @@ test("thinking extension refreshes capabilities and exercises command/autocomple
   assert.deepEqual(command.getArgumentCompletions?.("")?.map((item) => item.value), ["off"]);
 });
 
-test("thinking autocomplete intercepts /th prefixes", () => {
+test("thinking autocomplete intercepts /think prefixes without taking over Pi's /thinking", () => {
   assert.equal(isThinkingCommandPrefix("/th"), true);
-  assert.equal(isThinkingCommandPrefix("/thinking"), true);
+  assert.equal(isThinkingCommandPrefix("/think"), true);
+  assert.equal(isThinkingCommandPrefix("/thinking"), false);
   assert.equal(isThinkingCommandPrefix("/theme"), false);
 });

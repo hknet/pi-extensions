@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.10 - 2026-08-27
+
+### Changed
+
+- Verify development, type compatibility, and tests against Pi SDK 0.84.3 while retaining runtime compatibility with Pi 0.84.1 and newer.
+
 ## 0.1.9 - 2026-08-23
 
 ### Changed

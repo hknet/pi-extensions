@@ -82,6 +82,101 @@ test("set-model clamps a saved thinking level to the restored model", async () =
   }
 });
 
+test("set-model keeps a saved preference in sync with thinking changes", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-set-model-thinking-change-"));
+  const preferenceFile = join(directory, ".pi", "set-model.json");
+  await savePreference(preferenceFile, { provider: "test-provider", model: "test-model", thinkingLevel: "high" });
+
+  const handlers = new Map<string, Array<(event: any, ctx: any) => unknown>>();
+  let thinkingLevel = "off";
+  const pi = {
+    on(event: string, handler: (event: any, ctx: any) => unknown) {
+      handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+    },
+    registerCommand() {},
+    getThinkingLevel: () => thinkingLevel,
+    setThinkingLevel: (level: string) => { thinkingLevel = level; },
+    setModel: async () => true,
+  } as unknown as ExtensionAPI;
+  setModelExtension(pi);
+
+  const model = { provider: "test-provider", id: "test-model", reasoning: true };
+  const ctx = {
+    cwd: directory,
+    model,
+    isProjectTrusted: () => true,
+    modelRegistry: { find: () => model },
+    ui: {
+      addAutocompleteProvider: () => {},
+      notify: () => {},
+      theme: { fg: (_color: string, message: string) => message },
+    },
+  };
+
+  try {
+    for (const handler of handlers.get("session_start") ?? []) {
+      await handler({ type: "session_start", reason: "startup" }, ctx);
+    }
+    for (const handler of handlers.get("thinking_level_select") ?? []) {
+      await handler({ type: "thinking_level_select", level: "medium", previousLevel: "high" }, ctx);
+    }
+    assert.deepEqual(await loadPreference(preferenceFile), {
+      provider: "test-provider",
+      model: "test-model",
+      thinkingLevel: "medium",
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("set-model does not save thinking changes caused by shutdown restoration", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-set-model-shutdown-"));
+  const preferenceFile = join(directory, ".pi", "set-model.json");
+  await savePreference(preferenceFile, { provider: "test-provider", model: "test-model", thinkingLevel: "high" });
+
+  const handlers = new Map<string, Array<(event: any, ctx: any) => unknown>>();
+  let thinkingLevel = "medium";
+  const pi = {
+    on(event: string, handler: (event: any, ctx: any) => unknown) {
+      handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+    },
+    registerCommand() {},
+    getThinkingLevel: () => thinkingLevel,
+    setThinkingLevel: (level: string) => { thinkingLevel = level; },
+    setModel: async () => true,
+  } as unknown as ExtensionAPI;
+  setModelExtension(pi);
+
+  const model = { provider: "test-provider", id: "test-model", reasoning: true };
+  const ctx = {
+    cwd: directory,
+    model,
+    isProjectTrusted: () => true,
+    modelRegistry: { find: () => model },
+    ui: {
+      addAutocompleteProvider: () => {},
+      notify: () => {},
+      theme: { fg: (_color: string, message: string) => message },
+    },
+  };
+
+  try {
+    for (const handler of handlers.get("session_start") ?? []) {
+      await handler({ type: "session_start", reason: "startup" }, ctx);
+    }
+    for (const handler of handlers.get("session_shutdown") ?? []) {
+      await handler({ type: "session_shutdown", reason: "quit" }, ctx);
+    }
+    for (const handler of handlers.get("thinking_level_select") ?? []) {
+      await handler({ type: "thinking_level_select", level: "medium", previousLevel: "high" }, ctx);
+    }
+    assert.equal((await loadPreference(preferenceFile))?.thinkingLevel, "high");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("set-model preferences persist locally and can be read back", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pi-set-model-"));
   const preferenceFile = join(directory, ".pi", "set-model.json");

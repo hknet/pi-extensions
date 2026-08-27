@@ -71,6 +71,7 @@ export default function setModelExtension(pi: ExtensionAPI) {
   let projectTrusted = false;
   let modelBeforeProjectPreference: NonNullable<ExtensionContext["model"]> | undefined;
   let thinkingBeforeProjectPreference: ThinkingLevel | undefined;
+  let shuttingDown = false;
   let writeQueue = Promise.resolve();
 
   function queueSave(nextPreference: ProjectPreference): void {
@@ -82,6 +83,7 @@ export default function setModelExtension(pi: ExtensionAPI) {
   }
 
   pi.on("session_start", async (_event, ctx) => {
+    shuttingDown = false;
     ctx.ui.addAutocompleteProvider((current) => ({
       async getSuggestions(lines, cursorLine, cursorCol, options) {
         const line = lines[cursorLine] ?? "";
@@ -186,7 +188,23 @@ export default function setModelExtension(pi: ExtensionAPI) {
     }
   });
 
+  pi.on("thinking_level_select", async (event, ctx) => {
+    if (
+      shuttingDown ||
+      !projectTrusted ||
+      !preference ||
+      !ctx.model ||
+      ctx.model.provider !== preference.provider ||
+      ctx.model.id !== preference.model ||
+      event.level === preference.thinkingLevel
+    ) return;
+
+    queueSave({ ...preference, thinkingLevel: event.level });
+    await writeQueue;
+  });
+
   pi.on("session_shutdown", async () => {
+    shuttingDown = true;
     if (!modelBeforeProjectPreference) return;
     await pi.setModel(modelBeforeProjectPreference);
     if (thinkingBeforeProjectPreference !== undefined) {

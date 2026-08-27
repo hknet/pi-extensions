@@ -1,7 +1,7 @@
 {
   "name": "@hk_net/pi-thinking-command",
-  "version": "0.1.9",
-  "description": "Pi extension that adds a /thinking slash command for changing reasoning level",
+  "version": "0.1.10",
+  "description": "Pi extension that adds a /think slash command for changing reasoning level",
   "type": "module",
   "private": false,
   "keywords": [

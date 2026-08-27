@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.6 - 2026-08-27
+
+### Changed
+
+- Verify development, type compatibility, and tests against Pi SDK 0.84.3 while retaining runtime compatibility with Pi 0.84.1 and newer.
+
+### Fixed
+
+- Keep an existing project preference synchronized when Pi's thinking level changes for the saved model, so `/set-model` matches the footer.
+
 ## 0.1.5 - 2026-08-23
 
 ### Changed

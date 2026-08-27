@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.6 - 2026-08-27
+
+### Changed
+
+- Update the development and validation baseline for every extension package to Pi SDK 0.84.3 while retaining runtime compatibility with Pi 0.84.1 and newer.
+- Rename the thinking extension command from `/thinking` to `/think` because Pi 0.84.3 took over the `/thinking` name for its native selector, removing the built-in command conflict while preserving the shortcut alongside Pi's command.
+
+### Fixed
+
+- Keep `pi-set-model` preferences synchronized when Pi's thinking level changes for the saved model, so the project preference matches the footer.
+
 ## 0.3.5 - 2026-08-23
 
 ### Changed

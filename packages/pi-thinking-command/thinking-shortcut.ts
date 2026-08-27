@@ -43,7 +43,7 @@ export function getThinkingLevelCompletions(
 }
 
 export function isThinkingCommandPrefix(value: string): boolean {
-  return value.startsWith("/th") && "/thinking".startsWith(value);
+  return value.startsWith("/th") && "/think".startsWith(value);
 }
 
 export default function thinkingShortcutExtension(pi: ExtensionAPI) {
@@ -61,19 +61,19 @@ export default function thinkingShortcutExtension(pi: ExtensionAPI) {
         const line = lines[cursorLine] ?? "";
         const beforeCursor = line.slice(0, cursorCol);
         if (cursorCol === line.length && isThinkingCommandPrefix(beforeCursor)) {
-          if (beforeCursor === "/thinking") {
+          if (beforeCursor === "/think") {
             return { prefix: "", items: getThinkingLevelCompletions("", supportedLevels) ?? [] };
           }
           return {
             prefix: beforeCursor,
-            items: [{ value: "thinking", label: "thinking", description: "Set the thinking level" }],
+            items: [{ value: "think", label: "think", description: "Set the thinking level" }],
           };
         }
-        if (beforeCursor === "/thinking " && cursorCol === line.length) {
+        if (beforeCursor === "/think " && cursorCol === line.length) {
           return { prefix: "", items: getThinkingLevelCompletions("", supportedLevels) ?? [] };
         }
 
-        const match = beforeCursor.match(/^\/thinking\s+(\S*)$/);
+        const match = beforeCursor.match(/^\/think\s+(\S*)$/);
         if (match && cursorCol === line.length) {
           const prefix = match[1] ?? "";
           const items = getThinkingLevelCompletions(prefix, supportedLevels);
@@ -86,22 +86,22 @@ export default function thinkingShortcutExtension(pi: ExtensionAPI) {
         const line = lines[cursorLine] ?? "";
         const beforeCursor = line.slice(0, cursorCol);
         if (cursorCol === line.length && isThinkingCommandPrefix(beforeCursor)) {
-          if (beforeCursor !== "/thinking") {
+          if (beforeCursor !== "/think") {
             return {
-              lines: [...lines.slice(0, cursorLine), "/thinking", ...lines.slice(cursorLine + 1)],
+              lines: [...lines.slice(0, cursorLine), "/think", ...lines.slice(cursorLine + 1)],
               cursorLine,
-              cursorCol: "/thinking".length,
+              cursorCol: "/think".length,
             };
           }
-          const nextLine = `/thinking ${item.value}`;
+          const nextLine = `/think ${item.value}`;
           return {
             lines: [...lines.slice(0, cursorLine), nextLine, ...lines.slice(cursorLine + 1)],
             cursorLine,
             cursorCol: nextLine.length,
           };
         }
-        if (beforeCursor === "/thinking " && cursorCol === line.length) {
-          const nextLine = `/thinking ${item.value}`;
+        if (beforeCursor === "/think " && cursorCol === line.length) {
+          const nextLine = `/think ${item.value}`;
           return {
             lines: [...lines.slice(0, cursorLine), nextLine, ...lines.slice(cursorLine + 1)],
             cursorLine,
@@ -114,7 +114,7 @@ export default function thinkingShortcutExtension(pi: ExtensionAPI) {
       shouldTriggerFileCompletion(lines, cursorLine, cursorCol) {
         const line = lines[cursorLine] ?? "";
         const beforeCursor = line.slice(0, cursorCol);
-        if (/^\/thinking(?:\s+\S*)?$/.test(beforeCursor) && cursorCol === line.length) return false;
+        if (/^\/think(?:\s+\S*)?$/.test(beforeCursor) && cursorCol === line.length) return false;
         return current.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? true;
       },
     }));
@@ -130,7 +130,7 @@ export default function thinkingShortcutExtension(pi: ExtensionAPI) {
     ctx.ui.setStatus("thinking", `level: ${event.level}`);
   });
 
-  pi.registerCommand("thinking", {
+  pi.registerCommand("think", {
     description: "Set the thinking level supported by the active model",
     getArgumentCompletions: (prefix) => getThinkingLevelCompletions(prefix, supportedLevels),
     handler: async (args, ctx) => {
