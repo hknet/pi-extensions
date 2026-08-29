@@ -184,6 +184,11 @@ export function resolveAdviseMode(args: string | undefined, isIdle: boolean): Ad
   return ADVISE_MODES.includes(explicitMode) ? (explicitMode as AdviseMode) : undefined;
 }
 
+/** Queue non-triggering display feedback without immediately starting or steering an agent turn. */
+export function showAdvisorFeedback(pi: Pick<ExtensionAPI, "sendMessage">, text: string): void {
+  pi.sendMessage({ customType: "advisor", content: text, display: true }, { triggerTurn: false });
+}
+
 const ADVISOR_SYSTEM_PROMPT = `You are a stronger reviewer model acting as an advisor to another AI coding agent.
 
 You are given that agent's FULL working transcript for the current task: the user's
@@ -958,7 +963,7 @@ export default function advisorExtension(pi: ExtensionAPI) {
         }
 
         if (mode === "show") {
-          pi.sendMessage({ customType: "advisor", content: text, display: true });
+          showAdvisorFeedback(pi, text);
           return;
         }
 

@@ -1,6 +1,6 @@
 # pi-advisor
 
-A [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) extension for Pi 0.84.1 or newer (tested with the current Pi 0.84.3 release) that offers a
+A [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) extension for Pi 0.84.4 or newer that offers a
 parameterless `advisor` tool — inspired by Claude Code's advisor, but expanded with additional
 nudges and a manual review procedure. The regular model calls `advisor` to get a second opinion
 from an explicitly configured **stronger reviewer model** that sees the *entire* conversation transcript. Beyond the

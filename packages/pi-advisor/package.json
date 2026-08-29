@@ -1,6 +1,6 @@
 {
   "name": "@hk_net/pi-advisor",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Pi advisor extension: consult a configured reviewer model on the full conversation transcript",
   "type": "module",
   "private": false,

@@ -27,6 +27,19 @@ export interface TimestampRuntimeState {
     pendingSessionSummary: SessionInterval | undefined;
 }
 
+export interface TaskTimingState {
+    startedAt: number | undefined;
+    promptStartedAt: number | undefined;
+    promptDepth: number;
+    waitingForUserMs: number;
+}
+
+export interface CompletedTaskTiming {
+    totalMs: number;
+    activeMs: number;
+    waitingForUserMs: number;
+}
+
 const RUNTIME_STATE_KEY = Symbol.for("hknet.pi-timestamp.runtime-state");
 
 export function createRuntimeState(processStartedAt: number): TimestampRuntimeState {
@@ -65,6 +78,50 @@ export function takePendingSessionSummary(state: TimestampRuntimeState): Session
     const pending = state.pendingSessionSummary;
     state.pendingSessionSummary = undefined;
     return pending;
+}
+
+export function createTaskTimingState(): TaskTimingState {
+    return { startedAt: undefined, promptStartedAt: undefined, promptDepth: 0, waitingForUserMs: 0 };
+}
+
+export function beginTask(state: TaskTimingState, now: number): void {
+    if (state.startedAt !== undefined) return;
+    state.startedAt = now;
+    state.promptStartedAt = undefined;
+    state.promptDepth = 0;
+    state.waitingForUserMs = 0;
+}
+
+export function beginUserPromptWait(state: TaskTimingState, now: number): void {
+    if (state.startedAt === undefined) return;
+    if (state.promptDepth++ === 0) state.promptStartedAt = now;
+}
+
+export function endUserPromptWait(state: TaskTimingState, now: number): void {
+    if (state.promptDepth === 0) return;
+    if (--state.promptDepth !== 0 || state.promptStartedAt === undefined) return;
+    state.waitingForUserMs += Math.max(0, now - state.promptStartedAt);
+    state.promptStartedAt = undefined;
+}
+
+export function finishTask(state: TaskTimingState, now: number): CompletedTaskTiming | undefined {
+    if (state.startedAt === undefined) return undefined;
+    if (state.promptDepth > 0 && state.promptStartedAt !== undefined) {
+        state.waitingForUserMs += Math.max(0, now - state.promptStartedAt);
+        state.promptStartedAt = undefined;
+        state.promptDepth = 0;
+    }
+    const totalMs = Math.max(0, now - state.startedAt);
+    const completed = {
+        totalMs,
+        waitingForUserMs: Math.min(totalMs, state.waitingForUserMs),
+        activeMs: 0,
+    };
+    completed.activeMs = totalMs - completed.waitingForUserMs;
+    state.startedAt = undefined;
+    state.promptDepth = 0;
+    state.waitingForUserMs = 0;
+    return completed;
 }
 
 function formatTime(ts: number): string {
@@ -132,7 +189,7 @@ export function formatRuntimeDuration(ms: number): string {
 }
 
 export default function (pi: ExtensionAPI) {
-    let taskStartTime: number | undefined;
+    const taskTiming = createTaskTimingState();
 
     function notifyAccent(ctx: ExtensionContext, message: string): void {
         ctx.ui.notify(ctx.ui.theme.fg("accent", message), "info");
@@ -141,7 +198,17 @@ export default function (pi: ExtensionAPI) {
     // Track the complete run. Automatic retries and compaction recovery can emit
     // additional agent_start events before agent_settled, so retain the first start.
     pi.on("agent_start", async () => {
-        taskStartTime ??= Date.now();
+        beginTask(taskTiming, Date.now());
+    });
+
+    // Pi coalesces nested UI prompts. Track only prompt spans that overlap an
+    // active agent run, so configuration dialogs while idle do not affect timing.
+    pi.on("ui_prompt_start", async () => {
+        beginUserPromptWait(taskTiming, Date.now());
+    });
+
+    pi.on("ui_prompt_end", async () => {
+        endUserPromptWait(taskTiming, Date.now());
     });
 
     // Show "Sent HH:MM:SS" after each user message.
@@ -159,15 +226,15 @@ export default function (pi: ExtensionAPI) {
     // Show completion timing only after retries, compaction recovery, and queued
     // continuations have fully settled.
     pi.on("agent_settled", async (_event, ctx) => {
-        const startTime = taskStartTime;
-        taskStartTime = undefined;
-
-        if (startTime === undefined) return;
-
         const endTime = Date.now();
-        const duration = endTime - startTime;
+        const timing = finishTask(taskTiming, endTime);
+        if (!timing) return;
 
-        ctx.ui.notify(`Done at ${formatTime(endTime)} · ${formatDuration(duration)}`, "info");
+        const total = formatDuration(timing.totalMs);
+        const detail = timing.waitingForUserMs > 0
+            ? ` · active ${formatDuration(timing.activeMs)} · waiting ${formatDuration(timing.waitingForUserMs)}`
+            : "";
+        ctx.ui.notify(`Done at ${formatTime(endTime)} · ${timing.waitingForUserMs > 0 ? `total ${total}` : total}${detail}`, "info");
     });
 
     pi.on("session_start", (_event, ctx) => {

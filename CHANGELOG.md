@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.7 - 2026-08-29
+
+### Added
+
+- Split timestamp completion summaries that include an extension UI prompt into total elapsed time, active agent time, and time waiting for user input; runs with no prompt retain the concise existing duration.
+
+### Changed
+
+- Require Pi 0.84.4 or newer; this is the development and validation baseline for every extension package.
+
+### Security
+
+- Write `pi-set-model` preferences through an exclusively created, owner-only, randomly named temporary file before atomically replacing the preference file.
+
+### Compatibility
+
+- Use Pi 0.84.4's non-triggering custom-message contract for advisor display feedback; Pi safely queues it during active tool runs, avoiding invalid provider message histories on replay.
+
 ## 0.3.6 - 2026-08-27
 
 ### Changed

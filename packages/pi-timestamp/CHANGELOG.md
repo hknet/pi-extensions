@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.13 - 2026-08-29
+
+### Added
+
+- Split completion timing into total elapsed, active agent, and user-prompt waiting time when an extension UI prompt occurs during an agent run; retain the concise duration when none occurs.
+
+### Changed
+
+- Require Pi 0.84.4 or newer; this is the development, type-compatibility, and test baseline.
+
 ## 0.1.12 - 2026-08-27
 
 ### Changed

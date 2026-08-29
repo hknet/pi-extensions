@@ -1,7 +1,8 @@
 // Copyright © 2026 kapper.net - KAPPER NETWORK-COMMUNICATIONS GmbH
 // SPDX-License-Identifier: EUPL-1.2
 
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { clampThinkingLevel } from "@earendil-works/pi-ai";
 import { CONFIG_DIR_NAME, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -60,9 +61,22 @@ export async function loadPreference(path: string): Promise<ProjectPreference | 
 
 export async function savePreference(path: string, preference: ProjectPreference): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
-  const temporaryPath = `${path}.tmp-${process.pid}`;
-  await writeFile(temporaryPath, `${JSON.stringify(preference, null, 2)}\n`, "utf8");
-  await rename(temporaryPath, path);
+  // Keep the temporary file in the destination directory so rename is atomic,
+  // while using an unpredictable, exclusively-created path to avoid clobbering
+  // or following files supplied by another local process.
+  const temporaryPath = `${path}.tmp-${randomUUID()}`;
+  let temporaryFile: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    temporaryFile = await open(temporaryPath, "wx", 0o600);
+    await temporaryFile.writeFile(`${JSON.stringify(preference, null, 2)}\n`, "utf8");
+    await temporaryFile.sync();
+    await temporaryFile.close();
+    temporaryFile = undefined;
+    await rename(temporaryPath, path);
+  } finally {
+    await temporaryFile?.close().catch(() => {});
+    await unlink(temporaryPath).catch(() => {});
+  }
 }
 
 export default function setModelExtension(pi: ExtensionAPI) {

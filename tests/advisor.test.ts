@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { AgentSession, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import advisorExtension, {
   MAX_TOOL_CALL_ARGS_CHARS,
   MAX_TOOL_RESULT_CHARS,
@@ -13,6 +13,7 @@ import advisorExtension, {
   parseSpec,
   renderEntry,
   resolveAdviseMode,
+  showAdvisorFeedback,
   truncate,
   validateAdvisorConfig,
 } from "../packages/pi-advisor/advisor.js";
@@ -178,4 +179,34 @@ test("resolveAdviseMode defaults to pipe when idle and steer when running", () =
   assert.equal(resolveAdviseMode("show", false), "show");
   assert.equal(resolveAdviseMode(" pipe ", false), "pipe");
   assert.equal(resolveAdviseMode("bogus", true), undefined);
+});
+
+test("advisor non-triggering feedback is deferred while streaming", async () => {
+  const order: string[] = [];
+  const session = {
+    isStreaming: true,
+    _pendingNextTurnMessages: [],
+    _pendingCustomMessages: [],
+    _appendCustomMessage(message: { customType: string }) { order.push(message.customType); },
+  };
+  const agentSessionPrototype = AgentSession.prototype as unknown as {
+    sendCustomMessage: Function;
+    _flushPendingCustomMessages: Function;
+  };
+  const pi = {
+    sendMessage(message: unknown, options: unknown) {
+      return agentSessionPrototype.sendCustomMessage.call(session, message, options);
+    },
+  } as Pick<ExtensionAPI, "sendMessage">;
+
+  showAdvisorFeedback(pi, "review");
+  await Promise.resolve();
+  assert.equal(session._pendingCustomMessages.length, 1);
+  assert.equal(order.length, 0);
+
+  // AgentSession flushes non-triggering messages only after its turn_end event,
+  // when the assistant's tool results have already been recorded.
+  order.push("toolResult");
+  agentSessionPrototype._flushPendingCustomMessages.call(session);
+  assert.deepEqual(order, ["toolResult", "advisor"]);
 });

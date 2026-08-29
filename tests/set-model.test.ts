@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import setModelExtension, {
@@ -30,6 +30,42 @@ test("set-model rejects malformed or empty preferences", async () => {
     assert.equal(await loadPreference(preferenceFile), undefined);
   } finally {
     console.error = originalError;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("set-model ignores project preferences until the project is trusted", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-set-model-untrusted-"));
+  const preferenceFile = join(directory, ".pi", "set-model.json");
+  await savePreference(preferenceFile, { provider: "test-provider", model: "test-model", thinkingLevel: "high" });
+
+  const handlers = new Map<string, Array<(event: any, ctx: any) => unknown>>();
+  let setModelCalls = 0;
+  const pi = {
+    on(event: string, handler: (event: any, ctx: any) => unknown) {
+      handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+    },
+    registerCommand() {},
+    getThinkingLevel: () => "off",
+    setThinkingLevel() {},
+    setModel: async () => { setModelCalls++; return true; },
+  } as unknown as ExtensionAPI;
+  setModelExtension(pi);
+
+  const ctx = {
+    cwd: directory,
+    model: { provider: "previous", id: "previous-model" },
+    isProjectTrusted: () => false,
+    modelRegistry: { find: () => { throw new Error("untrusted project preference must not be read"); } },
+    ui: { addAutocompleteProvider: () => {}, notify: () => {}, theme: { fg: (_color: string, message: string) => message } },
+  };
+
+  try {
+    for (const handler of handlers.get("session_start") ?? []) {
+      await handler({ type: "session_start", reason: "startup" }, ctx);
+    }
+    assert.equal(setModelCalls, 0);
+  } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -185,6 +221,25 @@ test("set-model preferences persist locally and can be read back", async () => {
     await savePreference(preferenceFile, preference);
     assert.deepEqual(await loadPreference(preferenceFile), preference);
     assert.match(await readFile(preferenceFile, "utf8"), /test-model/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("set-model saves concurrent preferences through private, cleaned-up temporary files", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-set-model-atomic-"));
+  const preferenceFile = join(directory, ".pi", "set-model.json");
+  const preferences = Array.from({ length: 12 }, (_, index) => ({
+    provider: "test-provider",
+    model: `test-model-${index}`,
+    thinkingLevel: "high" as const,
+  }));
+  try {
+    await Promise.all(preferences.map((preference) => savePreference(preferenceFile, preference)));
+    const saved = await loadPreference(preferenceFile);
+    assert.ok(preferences.some((preference) => JSON.stringify(preference) === JSON.stringify(saved)));
+    assert.deepEqual(await readdir(join(directory, ".pi")), ["set-model.json"]);
+    if (process.platform !== "win32") assert.equal((await stat(preferenceFile)).mode & 0o077, 0);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.11 - 2026-08-29
+
+### Changed
+
+- Require Pi 0.84.4 or newer; this is the development, type-compatibility, and test baseline.
+
+### Compatibility
+
+- Use Pi 0.84.4's non-triggering custom-message contract for display advisor feedback; Pi safely queues it during active tool runs, avoiding invalid provider message histories on replay.
+
 ## 0.1.10 - 2026-08-27
 
 ### Changed

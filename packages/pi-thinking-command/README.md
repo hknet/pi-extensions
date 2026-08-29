@@ -1,6 +1,6 @@
 # `/think` command extension for pi
 
-Adds a `/think` thinking-level shortcut and status display to Pi 0.84.1 or newer (tested with the current Pi 0.84.3 release).
+Adds a `/think` thinking-level shortcut and status display to Pi 0.84.4 or newer.
 
 This is especially useful when switching between model classes. Smaller models, including many local models, often benefit from tighter thinking limits than larger hosted models from major providers.
 

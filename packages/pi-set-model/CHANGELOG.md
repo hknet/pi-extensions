@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.7 - 2026-08-29
+
+### Changed
+
+- Require Pi 0.84.4 or newer; this is the development, type-compatibility, and test baseline.
+
+### Security
+
+- Write preferences through an exclusively created, owner-only, randomly named temporary file before atomically replacing the preference file.
+
 ## 0.1.6 - 2026-08-27
 
 ### Changed
