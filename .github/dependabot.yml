@@ -6,14 +6,13 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     ignore:
-      # Keep the development compiler and Node declarations aligned with the
-      # versions used by the pinned Pi SDK. Revisit when Pi upgrades them.
+      # Defer compiler majors until the pinned Pi SDK adopts them.
       - dependency-name: typescript
         update-types:
           - version-update:semver-major
+      # Keep Node declarations at the exact version tested with the pinned Pi SDK.
+      # Revisit when Pi upgrades its Node types baseline.
       - dependency-name: "@types/node"
-        update-types:
-          - version-update:semver-major
 
   - package-ecosystem: github-actions
     directory: /

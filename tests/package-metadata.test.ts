@@ -105,16 +105,17 @@ test("GitHub Actions dependencies are pinned to immutable commits", () => {
   assert.match(workflow, /uses:\s+actions\/setup-node@[0-9a-f]{40}\s+# v7/);
 });
 
-test("Dependabot defers development-toolchain majors until the pinned Pi SDK adopts them", () => {
+test("Dependabot keeps Node declarations on the pinned Pi SDK toolchain", () => {
   const dependabot = readFileSync(".github/dependabot.yml", "utf8");
   assert.match(
     dependabot,
     /dependency-name: typescript\s+update-types:\s+- version-update:semver-major/,
   );
-  assert.match(
-    dependabot,
-    /dependency-name: ["']@types\/node["']\s+update-types:\s+- version-update:semver-major/,
+  const nodeTypesIgnore = dependabot.match(
+    /^ {6}- dependency-name: ["']@types\/node["'](?:\n {8,}[^\n]*)*/m,
   );
+  assert.ok(nodeTypesIgnore, "@types/node has an ignore rule");
+  assert.doesNotMatch(nodeTypesIgnore[0], /update-types:/, "all @types/node updates are deferred until Pi updates its baseline");
 });
 
 test("every license identifies the copyright holder and EUPL terms", () => {
