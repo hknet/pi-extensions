@@ -10,9 +10,34 @@ import timestampExtension, {
   finishSession,
   finishTask,
   formatRuntimeDuration,
+  migrateRuntimeState,
   takePendingSessionSummary,
 } from "../packages/pi-timestamp/timestamp.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+function fakeClock(initialWallTime: number, initialMonotonicTime: number) {
+  let wallTime = initialWallTime;
+  let monotonicTime = initialMonotonicTime;
+  const originalDateNow = Date.now;
+  const originalPerformanceDescriptor = Object.getOwnPropertyDescriptor(performance, "now");
+  Date.now = () => wallTime;
+  Object.defineProperty(performance, "now", { configurable: true, value: () => monotonicTime });
+
+  return {
+    set(wall: number, monotonic: number) {
+      wallTime = wall;
+      monotonicTime = monotonic;
+    },
+    restore() {
+      Date.now = originalDateNow;
+      if (originalPerformanceDescriptor) {
+        Object.defineProperty(performance, "now", originalPerformanceDescriptor);
+      } else {
+        Reflect.deleteProperty(performance, "now");
+      }
+    },
+  };
+}
 
 test("formatRuntimeDuration formats seconds through weeks", () => {
   assert.equal(formatRuntimeDuration(0), "0s");
@@ -57,24 +82,22 @@ test("timestamp waits for agent settlement and retains the first retry start", a
   assert.equal(handlers.has("agent_end"), false);
   assert.equal(handlers.has("agent_settled"), true);
 
-  const originalNow = Date.now;
-  let now = 1_000;
-  Date.now = () => now;
+  const clock = fakeClock(1_000, 100);
   const ctx = { ui: { notify: (message: string) => notifications.push(message) } };
-  const emit = async (event: string) => {
-    for (const handler of handlers.get(event) ?? []) await handler({ type: event }, ctx);
+  const emit = async (event: string, extra: Record<string, unknown> = {}) => {
+    for (const handler of handlers.get(event) ?? []) await handler({ type: event, ...extra }, ctx);
   };
 
   try {
     await emit("agent_start");
-    now = 2_000;
+    clock.set(2_000, 1_100);
     await emit("agent_start"); // automatic retry must not reset the timer
-    now = 4_000;
+    clock.set(4_000, 3_100);
     await emit("agent_settled");
     assert.equal(notifications.length, 1);
     assert.match(notifications[0] ?? "", /^Done at \d{2}:\d{2}:\d{2} · 3\.0s$/);
   } finally {
-    Date.now = originalNow;
+    clock.restore();
   }
 });
 
@@ -88,46 +111,100 @@ test("timestamp reports total, active, and waiting time for UI prompts", async (
   } as unknown as ExtensionAPI;
   timestampExtension(pi);
 
-  const originalNow = Date.now;
-  let now = 1_000;
-  Date.now = () => now;
+  const clock = fakeClock(1_000, 1_000);
   const ctx = { ui: { notify: (message: string) => notifications.push(message) } };
-  const emit = async (event: string) => {
-    for (const handler of handlers.get(event) ?? []) await handler({ type: event }, ctx);
+  const emit = async (event: string, extra: Record<string, unknown> = {}) => {
+    for (const handler of handlers.get(event) ?? []) await handler({ type: event, ...extra }, ctx);
   };
 
   try {
     await emit("agent_start");
-    now = 2_000;
+    clock.set(2_000, 2_000);
     await emit("ui_prompt_start");
-    now = 5_000;
+    clock.set(5_000, 5_000);
     await emit("ui_prompt_end");
-    now = 7_000;
+    clock.set(7_000, 7_000);
     await emit("agent_settled");
     assert.match(notifications[0] ?? "", /^Done at \d{2}:\d{2}:\d{2} · total 6\.0s · active 3\.0s · waiting 3\.0s$/);
   } finally {
-    Date.now = originalNow;
+    clock.restore();
   }
 });
 
 test("session runtime state keeps reloads open and finalizes each session once", () => {
-  const state = createRuntimeState(1_000);
+  const state = createRuntimeState(1_000, 100);
 
-  assert.equal(beginSession(state, "first", 2_000), true);
-  assert.equal(beginSession(state, "first", 3_000), false); // /reload
+  assert.equal(beginSession(state, "first", 2_000, 200), true);
+  assert.equal(beginSession(state, "first", 3_000, 1_200), false); // /reload
   assert.equal(state.activeSession?.startedAt, 2_000);
+  assert.equal(state.activeSession?.startedMonotonic, 200);
 
-  assert.deepEqual(finishSession(state, 5_000), { id: "first", startedAt: 2_000, endedAt: 5_000 });
-  assert.equal(finishSession(state, 6_000), undefined); // final quit must not duplicate it
+  assert.deepEqual(finishSession(state, 5_000, 2_200), {
+    id: "first", startedAt: 2_000, endedAt: 5_000, durationMs: 2_000,
+  }); // wall time says 3s; monotonic elapsed time says 2s
+  assert.equal(finishSession(state, 6_000, 3_200), undefined); // final quit must not duplicate it
 
-  assert.equal(beginSession(state, "second", 7_000), true);
-  assert.deepEqual(finishSession(state, 11_000), { id: "second", startedAt: 7_000, endedAt: 11_000 });
+  assert.equal(beginSession(state, "second", 7_000, 4_000), true);
+  assert.deepEqual(finishSession(state, 11_000, 8_000), {
+    id: "second", startedAt: 7_000, endedAt: 11_000, durationMs: 4_000,
+  });
   assert.deepEqual(state.completedSessions, [
-    { id: "first", startedAt: 2_000, endedAt: 5_000 },
-    { id: "second", startedAt: 7_000, endedAt: 11_000 },
+    { id: "first", startedAt: 2_000, endedAt: 5_000, durationMs: 2_000 },
+    { id: "second", startedAt: 7_000, endedAt: 11_000, durationMs: 4_000 },
   ]);
 
   state.pendingSessionSummary = state.completedSessions[0];
-  assert.deepEqual(takePendingSessionSummary(state), { id: "first", startedAt: 2_000, endedAt: 5_000 });
+  assert.deepEqual(takePendingSessionSummary(state), {
+    id: "first", startedAt: 2_000, endedAt: 5_000, durationMs: 2_000,
+  });
   assert.equal(takePendingSessionSummary(state), undefined);
+});
+
+test("legacy process-wide timestamp state migrates to monotonic duration anchors", () => {
+  const legacyState = {
+    processStartedAt: 1_000,
+    activeSession: { id: "active", startedAt: 3_000 },
+    completedSessions: [{ id: "done", startedAt: 1_000, endedAt: 2_500 }],
+    pendingSessionSummary: { id: "done", startedAt: 1_000, endedAt: 2_500 },
+  };
+
+  const state = migrateRuntimeState(legacyState, 5_000, 10_000, 4_000);
+  assert.equal(state.processStartedMonotonic, 6_000);
+  assert.deepEqual(state.activeSession, { id: "active", startedAt: 3_000, startedMonotonic: 8_000 });
+  assert.equal(state.completedSessions[0]?.durationMs, 1_500);
+  assert.equal(state.pendingSessionSummary?.durationMs, 1_500);
+});
+
+test("aborted settlement reports stopped and clock jumps do not skew durations", async () => {
+  const handlers = new Map<string, Array<(event: any, ctx: any) => unknown>>();
+  const notifications: string[] = [];
+  const pi = {
+    on(event: string, handler: (event: any, ctx: any) => unknown) {
+      handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+    },
+  } as unknown as ExtensionAPI;
+  timestampExtension(pi);
+
+  const clock = fakeClock(1_000, 100);
+  const ctx = { ui: { notify: (message: string) => notifications.push(message) } };
+  const emit = async (event: string, extra: Record<string, unknown> = {}) => {
+    for (const handler of handlers.get(event) ?? []) await handler({ type: event, ...extra }, ctx);
+  };
+
+  try {
+    await emit("agent_start");
+    clock.set(90_000_000, 2_000); // wall clock jumps forward during an open prompt
+    await emit("ui_prompt_start");
+    clock.set(5_000, 4_500); // then jumps backward before the aborted settlement
+    await emit("agent_settled", { aborted: true });
+    await emit("agent_settled", { aborted: true }); // duplicate settlement is ignored
+
+    assert.equal(notifications.length, 1);
+    assert.match(
+      notifications[0] ?? "",
+      /^Stopped at \d{2}:\d{2}:\d{2} · total 4\.4s · active 1\.9s · waiting 2\.5s$/,
+    );
+  } finally {
+    clock.restore();
+  }
 });

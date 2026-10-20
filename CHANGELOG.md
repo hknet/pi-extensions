@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.8 - 2026-10-20
+
+### Changed
+
+- Align the development and typecheck baseline across all extensions with Pi SDK 1.3.0, TypeScript 7.0.2, and Node.js 22 type definitions 22.19.19; retain the documented Pi 0.84.4 runtime minimum.
+- Refresh the dependency lockfile and pin `actions/setup-node` to 7.1.0.
+- Harden advisor session/cancellation handling, live-config visibility, transcript limits, and configuration writes; expand regression coverage. See the advisor package changelog.
+
+### Fixed
+
+- Label aborted timestamped agent runs as stopped and use monotonic elapsed-time measurements for task, prompt-wait, session, and process durations.
+- Preserve `pi-set-model`'s saved thinking level while Pi applies its model-switch default during project-preference restoration, including immediate and delayed thinking-change events.
+
+### Development
+
+- Add `pi-set-model` lifecycle regression coverage for restoring the prior model/thinking level and clearing a preference after a queued thinking-level save.
+
 ## 0.3.7 - 2026-08-29
 
 ### Added

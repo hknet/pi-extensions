@@ -1,6 +1,6 @@
 # pi-advisor
 
-A [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) extension for Pi 0.84.4 or newer that offers a
+A [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) extension for Pi 0.84.4 or newer, developed and tested against Pi SDK 1.3.0, that offers a
 parameterless `advisor` tool — inspired by Claude Code's advisor, but expanded with additional
 nudges and a manual review procedure. The regular model calls `advisor` to get a second opinion
 from an explicitly configured **stronger reviewer model** that sees the *entire* conversation transcript. Beyond the
@@ -17,7 +17,11 @@ and primary-source evidence; and returns a verdict plus at most three prioritize
 premature consultation asks for the specific missing evidence instead of inventing a verdict.
 Individual tool-call arguments are truncated at 800 characters and tool results at
 2,000 characters so huge outputs do not dominate the review; after that, the transcript is truncated
-oldest-first only if it would overflow the reviewer's context window.
+oldest-first to meet an estimated context budget. The budget reserves the model's maximum
+output tokens plus 2,000 tokens for instructions, then estimates 3.5 UTF-16 code units per
+input token. This is a heuristic, not exact token counting: CJK text and code can use more
+tokens. A single oversized section is also trimmed, retaining its newest tail and a truncation
+notice. If no input budget remains, no reviewer request is sent.
 
 Beyond the callable tool, the extension provides two additional ways to get advice:
 
@@ -88,6 +92,11 @@ trusted reviewer model with `/advisor`. Thinking level uses the same order via
 `PI_ADVISOR_EFFORT` / project / global, default `high`. Timeout uses env
 `PI_ADVISOR_TIMEOUT_MS` > project > global, default 120 000 ms (2 minutes).
 
+**Live edits:** configuration is read afresh for each review. Tool visibility is refreshed on
+user input, before a run, after tool results, and by `/advisor` (including `status`), without a
+filesystem watcher or restart. An idle external edit takes effect at the next such boundary;
+project settings remain ignored while the project is untrusted.
+
 **Why the timeout?** When the running model calls `advisor`, it waits for the tool result.
 Without a timeout, a slow reviewer model or dropped connection would hang the entire turn.
 The timeout ensures the running model always makes progress.
@@ -132,7 +141,13 @@ tool's `promptGuidelines`. Two opt-in deterministic triggers, configurable per p
   before truly stopping (guarded to at most once per user prompt).
 - **`whenStuck: N`** — after N consecutive tool errors **or** N repeated identical tool calls
   (same tool name + same arguments), auto-consult the reviewer and inject the advice as a
-  steering message to get unstuck.
+  steering message to get unstuck. Success resets the error streak; different tool arguments
+  reset the loop streak. Identical failing calls cause one review, not two.
+
+All trigger state resets on a new user prompt, session start/shutdown, or aborted settlement.
+Aborted runs do not start an on-done review. In-flight automatic/manual reviews are cancelled
+on those boundaries and cannot inject stale feedback into a later session or prompt.
+Cancellation is not reported as a provider timeout.
 
 ## Privacy & security
 
@@ -155,8 +170,9 @@ tool's `promptGuidelines`. Two opt-in deterministic triggers, configurable per p
   - Tool result errors
 - **You control which model receives the data.** Configure `model` in `advisor.json` to point
   to a provider/model you trust. If no model is configured, no reviewer API call is made.
-- **No data is stored or logged by this extension.** The transcript is sent in-memory to the
-  reviewer model's API and not persisted locally.
+- **No separate transcript log is written by this extension.** The reviewer request is built
+  in memory. Configuration is stored in the locations above; advisor feedback and tool results
+  can be persisted by Pi as part of the session.
 - **Be mindful of secrets.** Tool results may contain secrets (API keys, credentials, tokens)
   from `bash` output or file contents. If your project contains sensitive data, consider
   configuring advisor to use a provider with a strong privacy policy, or disable auto-triggers.

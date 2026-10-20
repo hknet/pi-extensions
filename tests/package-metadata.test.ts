@@ -9,6 +9,8 @@ interface PackageManifest {
   peerDependencies?: Record<string, string>;
   peerDependenciesMeta?: Record<string, { optional?: boolean }>;
   private?: boolean;
+  devDependencies?: Record<string, string>;
+  allowScripts?: Record<string, boolean>;
 }
 
 const manifests = [
@@ -69,6 +71,30 @@ test("Pi SDK packages are optional wildcard peers supplied by the host", () => {
       assert.equal(range, "*", `${path} ${name} peer range`);
       assert.equal(manifest.peerDependenciesMeta?.[name]?.optional, true, `${path} ${name} optional peer`);
     }
+  }
+});
+
+test("Pi SDK development dependencies stay on one release to avoid duplicate type identities", () => {
+  const manifest = readManifest("package.json");
+  const sdkPackages = [
+    "@earendil-works/pi-ai",
+    "@earendil-works/pi-coding-agent",
+    "@earendil-works/pi-tui",
+  ];
+  const versions = sdkPackages.map((name) => manifest.devDependencies?.[name]);
+  assert.ok(versions.every((version) => version !== undefined));
+  assert.equal(new Set(versions).size, 1);
+});
+
+test("install-script denylist follows the exact transitive package versions", () => {
+  const manifest = readManifest("package.json");
+  const lock = JSON.parse(readFileSync("package-lock.json", "utf8")) as {
+    packages: Record<string, { version?: string }>;
+  };
+  for (const name of ["@google/genai", "protobufjs"]) {
+    const version = lock.packages[`node_modules/${name}`]?.version;
+    assert.ok(version, `${name} is present in the lockfile`);
+    assert.equal(manifest.allowScripts?.[`${name}@${version}`], false, `${name}@${version} remains blocked`);
   }
 });
 

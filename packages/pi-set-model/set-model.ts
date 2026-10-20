@@ -86,6 +86,7 @@ export default function setModelExtension(pi: ExtensionAPI) {
   let modelBeforeProjectPreference: NonNullable<ExtensionContext["model"]> | undefined;
   let thinkingBeforeProjectPreference: ThinkingLevel | undefined;
   let shuttingDown = false;
+  let restoringProjectPreference = false;
   let writeQueue = Promise.resolve();
 
   function queueSave(nextPreference: ProjectPreference): void {
@@ -166,11 +167,12 @@ export default function setModelExtension(pi: ExtensionAPI) {
     preferencePath = join(ctx.cwd, CONFIG_DIR_NAME, PREFERENCES_FILE_NAME);
     projectTrusted = ctx.isProjectTrusted();
     preference = projectTrusted ? await loadPreference(preferencePath) : undefined;
-    if (!preference) return;
+    const savedPreference = preference;
+    if (!savedPreference) return;
 
-    const model = ctx.modelRegistry.find(preference.provider, preference.model);
+    const model = ctx.modelRegistry.find(savedPreference.provider, savedPreference.model);
     if (!model) {
-      ctx.ui.notify(`Project model unavailable: ${preference.provider}/${preference.model}`, "warning");
+      ctx.ui.notify(`Project model unavailable: ${savedPreference.provider}/${savedPreference.model}`, "warning");
       return;
     }
 
@@ -178,23 +180,29 @@ export default function setModelExtension(pi: ExtensionAPI) {
     const previousThinkingLevel = pi.getThinkingLevel();
     const modelChanged =
       !previousModel || previousModel.provider !== model.provider || previousModel.id !== model.id;
-    const selected = await pi.setModel(model);
-    if (!selected) {
-      ctx.ui.notify(`No API key for project model: ${preference.provider}/${preference.model}`, "warning");
-      return;
+    let restoredThinkingLevel = savedPreference.thinkingLevel;
+    restoringProjectPreference = true;
+    try {
+      const selected = await pi.setModel(model);
+      if (!selected) {
+        ctx.ui.notify(`No API key for project model: ${savedPreference.provider}/${savedPreference.model}`, "warning");
+        return;
+      }
+      restoredThinkingLevel = clampThinkingLevel(model, savedPreference.thinkingLevel);
+      pi.setThinkingLevel(restoredThinkingLevel);
+    } finally {
+      restoringProjectPreference = false;
     }
-    const restoredThinkingLevel = clampThinkingLevel(model, preference.thinkingLevel);
-    pi.setThinkingLevel(restoredThinkingLevel);
     modelBeforeProjectPreference = previousModel;
     thinkingBeforeProjectPreference = previousThinkingLevel;
 
-    if (modelChanged || restoredThinkingLevel !== preference.thinkingLevel) {
+    if (modelChanged || restoredThinkingLevel !== savedPreference.thinkingLevel) {
       ctx.ui.notify(
         ctx.ui.theme.fg(
           "accent",
-          `Project model restored: ${preference.provider}/${preference.model} · thinking: ${pi.getThinkingLevel()}` +
-            (restoredThinkingLevel !== preference.thinkingLevel
-              ? ` (saved level ${preference.thinkingLevel} is unsupported)`
+          `Project model restored: ${savedPreference.provider}/${savedPreference.model} · thinking: ${pi.getThinkingLevel()}` +
+            (restoredThinkingLevel !== savedPreference.thinkingLevel
+              ? ` (saved level ${savedPreference.thinkingLevel} is unsupported)`
               : ""),
         ),
         "info",
@@ -205,6 +213,8 @@ export default function setModelExtension(pi: ExtensionAPI) {
   pi.on("thinking_level_select", async (event, ctx) => {
     if (
       shuttingDown ||
+      restoringProjectPreference ||
+      event.level !== pi.getThinkingLevel() ||
       !projectTrusted ||
       !preference ||
       !ctx.model ||

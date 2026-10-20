@@ -4,7 +4,10 @@
 
 Collection of [pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) extensions — small, self-contained plugins that add tools, commands, and automatic behaviors to the pi coding agent.
 
-Requires Pi 0.84.4 or newer.
+Requires Pi 0.84.4 or newer. Development and tests use Pi SDK 1.3.0.
+
+Advisor reviews now reset safely across sessions and cancellation, refresh tool visibility after
+configuration edits at interaction boundaries, and bound oversized transcript sections.
 
 ## Extensions
 

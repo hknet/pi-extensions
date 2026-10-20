@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.12 - 2026-10-20
+
+### Changed
+
+- Update the development, type-compatibility, and test baseline to Pi SDK 1.3.0; retain the Pi 0.84.4 runtime minimum.
+
 ## 0.1.11 - 2026-08-29
 
 ### Changed

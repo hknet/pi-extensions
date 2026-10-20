@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.1.12 - 2026-10-20
+
+### Changed
+
+- Update the development, type-compatibility, and test baseline to Pi SDK 1.3.0; retain the Pi 0.84.4 runtime minimum.
+- Resolve config once per review path rather than rereading it for each field; do not cache configuration across interactions.
+- Clarify independent error/loop triggers and the transcript's 3.5-code-units-per-token estimate.
+
+### Fixed
+
+- Reset all automatic-review state at session boundaries, new user prompts, and aborted settlement; cancel pending manual/automatic reviews and suppress stale delivery.
+- Do not run on-done reviews after abort, and do not misreport cancellation as a timeout.
+- Refresh tool visibility at input, run-start, tool-result, and advisor-command boundaries after external config edits.
+- Bound single oversized transcript sections and account for truncation notices and actual available input budget.
+- Ignore whitespace-only timeout environment overrides.
+
+### Security
+
+- Treat transcript instructions only as evidence and explicitly prohibit revealing the reviewer's internal instructions.
+- Write config using exclusively created, randomly named, owner-only temporary files.
+
+### Tests
+
+- Cover config defaults/precedence/trust, API-key and header-only auth, unavailable models, thinking fallback, triggers, cancellation races, live config, transcript limits, and `/advise` parsing/completion.
+
 ## 0.1.11 - 2026-08-29
 
 ### Changed

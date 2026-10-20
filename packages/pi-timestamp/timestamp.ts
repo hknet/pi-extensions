@@ -18,11 +18,13 @@ export interface SessionInterval {
     id: string;
     startedAt: number;
     endedAt: number;
+    durationMs: number;
 }
 
 export interface TimestampRuntimeState {
     processStartedAt: number;
-    activeSession: { id: string; startedAt: number } | undefined;
+    processStartedMonotonic: number;
+    activeSession: { id: string; startedAt: number; startedMonotonic: number } | undefined;
     completedSessions: SessionInterval[];
     pendingSessionSummary: SessionInterval | undefined;
 }
@@ -42,33 +44,99 @@ export interface CompletedTaskTiming {
 
 const RUNTIME_STATE_KEY = Symbol.for("hknet.pi-timestamp.runtime-state");
 
-export function createRuntimeState(processStartedAt: number): TimestampRuntimeState {
-    return { processStartedAt, activeSession: undefined, completedSessions: [], pendingSessionSummary: undefined };
+export function createRuntimeState(
+    processStartedAt: number,
+    processStartedMonotonic: number = processStartedAt,
+): TimestampRuntimeState {
+    return {
+        processStartedAt,
+        processStartedMonotonic,
+        activeSession: undefined,
+        completedSessions: [],
+        pendingSessionSummary: undefined,
+    };
+}
+
+function migrateInterval(interval: SessionInterval): void {
+    // Intervals created before monotonic timing stored only wall-clock times.
+    if (!Number.isFinite(interval.durationMs)) {
+        interval.durationMs = Math.max(0, interval.endedAt - interval.startedAt);
+    }
+}
+
+export function migrateRuntimeState(
+    value: unknown,
+    wallNow: number,
+    monotonicNow: number,
+    uptimeMs: number = process.uptime() * 1000,
+): TimestampRuntimeState {
+    if (!value || typeof value !== "object") {
+        return createRuntimeState(wallNow - uptimeMs, monotonicNow - uptimeMs);
+    }
+
+    // Preserve the process-wide state across /reload. Older extension instances
+    // have no monotonic anchors, so recover process age from uptime and estimate
+    // the active session age from its wall-clock start time.
+    const state = value as Partial<TimestampRuntimeState>;
+    if (!Number.isFinite(state.processStartedAt)) state.processStartedAt = wallNow - uptimeMs;
+    if (!Number.isFinite(state.processStartedMonotonic)) {
+        state.processStartedMonotonic = monotonicNow - uptimeMs;
+    }
+    if (!Array.isArray(state.completedSessions)) state.completedSessions = [];
+    for (const interval of state.completedSessions) migrateInterval(interval);
+    if (state.activeSession && !Number.isFinite(state.activeSession.startedMonotonic)) {
+        state.activeSession.startedMonotonic = monotonicNow - Math.max(0, wallNow - state.activeSession.startedAt);
+    }
+    if (state.pendingSessionSummary) migrateInterval(state.pendingSessionSummary);
+    if (!("activeSession" in state)) state.activeSession = undefined;
+    if (!("pendingSessionSummary" in state)) state.pendingSessionSummary = undefined;
+    return state as TimestampRuntimeState;
 }
 
 function getRuntimeState(): TimestampRuntimeState {
     const globalStore = globalThis as Record<symbol, unknown>;
     const existing = globalStore[RUNTIME_STATE_KEY];
-    if (existing && typeof existing === "object") return existing as TimestampRuntimeState;
+    const wallNow = Date.now();
+    const monotonicNow = performance.now();
+    if (existing && typeof existing === "object") {
+        const state = migrateRuntimeState(existing, wallNow, monotonicNow, process.uptime() * 1000);
+        globalStore[RUNTIME_STATE_KEY] = state;
+        return state;
+    }
 
     // The extension can load after Pi has initialized. Anchor the summary to the
     // Node process start rather than the extension load time.
-    const state = createRuntimeState(Date.now() - process.uptime() * 1000);
+    const uptimeMs = process.uptime() * 1000;
+    const state = createRuntimeState(wallNow - uptimeMs, monotonicNow - uptimeMs);
     globalStore[RUNTIME_STATE_KEY] = state;
     return state;
 }
 
-export function beginSession(state: TimestampRuntimeState, id: string, startedAt: number): boolean {
+export function beginSession(
+    state: TimestampRuntimeState,
+    id: string,
+    startedAt: number,
+    startedMonotonic: number = startedAt,
+): boolean {
     if (state.activeSession?.id === id) return false;
-    state.activeSession = { id, startedAt };
+    state.activeSession = { id, startedAt, startedMonotonic };
     return true;
 }
 
-export function finishSession(state: TimestampRuntimeState, endedAt: number): SessionInterval | undefined {
+export function finishSession(
+    state: TimestampRuntimeState,
+    endedAt: number,
+    endedMonotonic: number = endedAt,
+): SessionInterval | undefined {
     const active = state.activeSession;
     if (!active) return undefined;
 
-    const interval = { ...active, endedAt };
+    const interval = {
+        id: active.id,
+        startedAt: active.startedAt,
+        endedAt,
+        durationMs: Math.max(0, endedMonotonic - active.startedMonotonic),
+    };
     state.completedSessions.push(interval);
     state.activeSession = undefined;
     return interval;
@@ -198,17 +266,17 @@ export default function (pi: ExtensionAPI) {
     // Track the complete run. Automatic retries and compaction recovery can emit
     // additional agent_start events before agent_settled, so retain the first start.
     pi.on("agent_start", async () => {
-        beginTask(taskTiming, Date.now());
+        beginTask(taskTiming, performance.now());
     });
 
     // Pi coalesces nested UI prompts. Track only prompt spans that overlap an
     // active agent run, so configuration dialogs while idle do not affect timing.
     pi.on("ui_prompt_start", async () => {
-        beginUserPromptWait(taskTiming, Date.now());
+        beginUserPromptWait(taskTiming, performance.now());
     });
 
     pi.on("ui_prompt_end", async () => {
-        endUserPromptWait(taskTiming, Date.now());
+        endUserPromptWait(taskTiming, performance.now());
     });
 
     // Show "Sent HH:MM:SS" after each user message.
@@ -225,16 +293,17 @@ export default function (pi: ExtensionAPI) {
 
     // Show completion timing only after retries, compaction recovery, and queued
     // continuations have fully settled.
-    pi.on("agent_settled", async (_event, ctx) => {
+    pi.on("agent_settled", async (event, ctx) => {
         const endTime = Date.now();
-        const timing = finishTask(taskTiming, endTime);
+        const timing = finishTask(taskTiming, performance.now());
         if (!timing) return;
 
         const total = formatDuration(timing.totalMs);
         const detail = timing.waitingForUserMs > 0
             ? ` · active ${formatDuration(timing.activeMs)} · waiting ${formatDuration(timing.waitingForUserMs)}`
             : "";
-        ctx.ui.notify(`Done at ${formatTime(endTime)} · ${timing.waitingForUserMs > 0 ? `total ${total}` : total}${detail}`, "info");
+        const label = event.aborted ? "Stopped" : "Done";
+        ctx.ui.notify(`${label} at ${formatTime(endTime)} · ${timing.waitingForUserMs > 0 ? `total ${total}` : total}${detail}`, "info");
     });
 
     pi.on("session_start", (_event, ctx) => {
@@ -243,13 +312,13 @@ export default function (pi: ExtensionAPI) {
         if (previousSession) {
             notifyAccent(
                 ctx,
-                `Previous session complete · ${formatSessionRange(previousSession)} · ${formatRuntimeDuration(previousSession.endedAt - previousSession.startedAt)}`,
+                `Previous session complete · ${formatSessionRange(previousSession)} · ${formatRuntimeDuration(previousSession.durationMs)}`,
             );
         }
 
         const sessionId = ctx.sessionManager.getSessionId();
         // A reload rebinds the extension to the same session. Keep its timer running.
-        beginSession(state, sessionId, Date.now());
+        beginSession(state, sessionId, Date.now(), performance.now());
     });
 
     pi.on("session_shutdown", (event, ctx) => {
@@ -257,7 +326,8 @@ export default function (pi: ExtensionAPI) {
         if (event.reason === "reload") return;
 
         const endTime = Date.now();
-        const interval = finishSession(getRuntimeState(), endTime);
+        const endMonotonic = performance.now();
+        const interval = finishSession(getRuntimeState(), endTime, endMonotonic);
 
         if (event.reason !== "quit") {
             if (interval) getRuntimeState().pendingSessionSummary = interval;
@@ -267,7 +337,7 @@ export default function (pi: ExtensionAPI) {
         const state = getRuntimeState();
         const sessionRows = state.completedSessions.map(
             (session, index) =>
-                `  ${index + 1}. ${formatSessionRange(session)} · ${formatRuntimeDuration(session.endedAt - session.startedAt)}`,
+                `  ${index + 1}. ${formatSessionRange(session)} · ${formatRuntimeDuration(session.durationMs)}`,
         );
         // On normal Ctrl+D shutdown Pi has already stopped the TUI, so ui.notify()
         // cannot render. Write after terminal restoration instead.
@@ -275,7 +345,7 @@ export default function (pi: ExtensionAPI) {
             "Pi runtime complete",
             `  Started: ${formatDateTime(state.processStartedAt)}`,
             `  Ended:   ${formatDateTime(endTime)}`,
-            `  Total:   ${formatRuntimeDuration(endTime - state.processStartedAt)}`,
+            `  Total:   ${formatRuntimeDuration(endMonotonic - state.processStartedMonotonic)}`,
             ...(sessionRows.length > 0 ? ["  Sessions:", ...sessionRows] : []),
         ].join("\n");
         if (ctx.mode === "tui") {

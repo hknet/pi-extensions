@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.8 - 2026-10-20
+
+### Changed
+
+- Update the development, type-compatibility, and test baseline to Pi SDK 1.3.0; retain the Pi 0.84.4 runtime minimum.
+
+### Fixed
+
+- Preserve the saved project thinking level when Pi applies its model-switch default during restoration, including immediate and delayed thinking-change events.
+
+### Tests
+
+- Cover restoration across immediate and delayed model-switch events, shutdown restoration, and subsequent user thinking-level changes.
+- Verify `/set-model clear` remains effective when a thinking-level save is already queued.
+
 ## 0.1.7 - 2026-08-29
 
 ### Changed

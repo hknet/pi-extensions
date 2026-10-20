@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.14 - 2026-10-20
+
+### Changed
+
+- Update the development, type-compatibility, and test baseline to Pi SDK 1.3.0; retain the Pi 0.84.4 runtime minimum.
+- Measure elapsed task, prompt-wait, session, and process durations with a monotonic clock.
+
+### Fixed
+
+- Label aborted agent runs as stopped instead of completed.
+
 ## 0.1.13 - 2026-08-29
 
 ### Added

@@ -1,11 +1,11 @@
 # pi-timestamp
 
-Shows timestamps for user input and agent completion timing. Requires Pi 0.84.4 or newer.
+Shows timestamps for user input and agent completion timing. Requires Pi 0.84.4 or newer; development and tests use Pi SDK 1.3.0.
 
 ## What it does
 
 - **User input**: Shows `Sent HH:MM:SS` as a dim status line in the chat display after each user message
-- **Agent completion**: Shows `Done at HH:MM:SS · duration` as a dim status line in the chat display after each agent turn. If an extension UI prompt paused the run, it instead shows total, active-agent, and user-waiting time (e.g., `Done at 14:32:05 · total 8.2s · active 3.2s · waiting 5.0s`).
+- **Agent completion**: Shows `Done at HH:MM:SS · duration` as a dim status line in the chat display after each completed agent turn. Aborted runs are labeled `Stopped at`. If an extension UI prompt paused the run, it instead shows total, active-agent, and user-waiting time (e.g., `Done at 14:32:05 · total 8.2s · active 3.2s · waiting 5.0s`).
 - **Session/runtime summaries**: Shows accent-colored summaries when switching sessions and at final Pi exit, including start/end times and durations. The final summary includes the complete Pi process runtime and every session interval.
 
 All timestamps and summaries are **display-only** — session-switch summaries render in Pi's UI and the final runtime summary prints after Pi restores the terminal in TUI mode. They never enter the LLM context.
@@ -31,7 +31,7 @@ cp packages/pi-timestamp/timestamp.ts ~/.pi/agent/extensions/timestamp.ts
 
 ## Duration measurement
 
-Captured from the first `agent_start` to `agent_settled`, so automatic retries, compaction recovery, tool calls, and queued continuations are included in one complete task duration. When an extension opens a blocking UI prompt during that run, Pi 0.84.4's prompt events subtract that user-wait time from the reported active-agent duration while retaining it in the total.
+Captured from the first `agent_start` to `agent_settled`, so automatic retries, compaction recovery, tool calls, and queued continuations are included in one complete task duration. Elapsed durations use a monotonic clock; displayed times use the local wall clock. When an extension opens a blocking UI prompt during that run, Pi 0.84.4's prompt events subtract that user-wait time from the reported active-agent duration while retaining it in the total.
 
 ## Issues and feedback
 
