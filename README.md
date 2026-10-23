@@ -18,6 +18,11 @@ configuration edits at interaction boundaries, and bound oversized transcript se
 | [**pi-timestamp**](./packages/pi-timestamp/) | Shows user/agent timestamps plus session-switch and full Pi-runtime summaries. |
 | [**pi-set-model**](./packages/pi-set-model/) | Remembers the selected model per project folder and keeps its saved thinking level synchronized with Pi. |
 
+## Screenshots
+
+<img width="50%" alt="The Advisor is helping a smaller model" src="https://github.com/user-attachments/assets/eaf669d9-74ce-44fc-a3fe-add299df8b8c" />
+
+
 ## Installation
 
 > **Choose one installation method.** Install either the GitHub bundle or individual npm packages, not both. Loading the same extension from both sources can duplicate commands, tools, event handlers, and UI output.
