@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.9 - 2026-11-17
+
+### Changed
+
+- Update the development, typecheck, and test baseline across all extensions to Pi SDK 1.5.2; retain the documented Pi 0.84.4 runtime minimum.
+- Update `pi-advisor` to import tool schema builders from the Pi-hosted `typebox` package.
+- Refresh the dependency lockfile for Pi SDK 1.5.2.
+
+### Fixed
+
+- Check `pi-set-model` trust from the current extension context instead of a cached startup flag, explain that Pi's `/trust` decision requires a restart, and report preference write failures accurately.
+
+### Development
+
+- Cover trust changes and local write failures in `pi-set-model`; validate all extensions against Pi 1.5.2.
+
 ## 0.3.8 - 2026-10-20
 
 ### Changed

@@ -81,20 +81,64 @@ export async function savePreference(path: string, preference: ProjectPreference
 
 export default function setModelExtension(pi: ExtensionAPI) {
   let preference: ProjectPreference | undefined;
+  let persistedPreference: ProjectPreference | undefined;
   let preferencePath = "";
-  let projectTrusted = false;
   let modelBeforeProjectPreference: NonNullable<ExtensionContext["model"]> | undefined;
   let thinkingBeforeProjectPreference: ThinkingLevel | undefined;
   let shuttingDown = false;
   let restoringProjectPreference = false;
   let writeQueue = Promise.resolve();
 
-  function queueSave(nextPreference: ProjectPreference): void {
-    if (!projectTrusted || !preferencePath) return;
+  function queueSave(nextPreference: ProjectPreference, ctx: ExtensionContext): Promise<boolean> {
+    if (!ctx.isProjectTrusted() || !preferencePath) return Promise.resolve(false);
     preference = nextPreference;
-    writeQueue = writeQueue
-      .then(() => savePreference(preferencePath, nextPreference))
-      .catch((error: unknown) => console.error(`pi-set-model: could not save preference: ${String(error)}`));
+    const save = writeQueue.then(async () => {
+      if (!ctx.isProjectTrusted()) throw new Error("Project trust is no longer active.");
+      await savePreference(preferencePath, nextPreference);
+    });
+    writeQueue = save.catch((error: unknown) => console.error(`pi-set-model: could not save preference: ${String(error)}`));
+    return save.then(
+      () => {
+        persistedPreference = nextPreference;
+        return true;
+      },
+      () => {
+        if (preference === nextPreference) preference = persistedPreference;
+        return false;
+      },
+    );
+  }
+
+  function queueClear(ctx: ExtensionContext): Promise<boolean> {
+    if (!ctx.isProjectTrusted() || !preferencePath) return Promise.resolve(false);
+    preference = undefined;
+    const clear = writeQueue.then(async () => {
+      if (!ctx.isProjectTrusted()) throw new Error("Project trust is no longer active.");
+      try {
+        await unlink(preferencePath);
+      } catch (error: unknown) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+    });
+    writeQueue = clear.catch((error: unknown) => console.error(`pi-set-model: could not clear preference: ${String(error)}`));
+    return clear.then(
+      () => {
+        persistedPreference = undefined;
+        return true;
+      },
+      () => {
+        if (preference === undefined) preference = persistedPreference;
+        return false;
+      },
+    );
+  }
+
+  function notifyWriteFailure(ctx: ExtensionContext, action: "save" | "clear"): void {
+    if (!ctx.isProjectTrusted()) {
+      ctx.ui.notify("Project trust is not active in this Pi session. Use /trust, restart Pi, then try again.", "warning");
+      return;
+    }
+    ctx.ui.notify(`Could not ${action} project model preference at ${preferencePath}; see the console for details.`, "error");
   }
 
   pi.on("session_start", async (_event, ctx) => {
@@ -165,8 +209,8 @@ export default function setModelExtension(pi: ExtensionAPI) {
     }));
 
     preferencePath = join(ctx.cwd, CONFIG_DIR_NAME, PREFERENCES_FILE_NAME);
-    projectTrusted = ctx.isProjectTrusted();
-    preference = projectTrusted ? await loadPreference(preferencePath) : undefined;
+    preference = ctx.isProjectTrusted() ? await loadPreference(preferencePath) : undefined;
+    persistedPreference = preference;
     const savedPreference = preference;
     if (!savedPreference) return;
 
@@ -215,7 +259,7 @@ export default function setModelExtension(pi: ExtensionAPI) {
       shuttingDown ||
       restoringProjectPreference ||
       event.level !== pi.getThinkingLevel() ||
-      !projectTrusted ||
+      !ctx.isProjectTrusted() ||
       !preference ||
       !ctx.model ||
       ctx.model.provider !== preference.provider ||
@@ -223,8 +267,9 @@ export default function setModelExtension(pi: ExtensionAPI) {
       event.level === preference.thinkingLevel
     ) return;
 
-    queueSave({ ...preference, thinkingLevel: event.level });
-    await writeQueue;
+    if (!(await queueSave({ ...preference, thinkingLevel: event.level }, ctx))) {
+      notifyWriteFailure(ctx, "save");
+    }
   });
 
   pi.on("session_shutdown", async () => {
@@ -255,8 +300,8 @@ export default function setModelExtension(pi: ExtensionAPI) {
       }
 
       if (action === "set") {
-        if (!projectTrusted) {
-          ctx.ui.notify("Trust this project before saving its model preference.", "warning");
+        if (!ctx.isProjectTrusted()) {
+          notifyWriteFailure(ctx, "save");
           return;
         }
         if (!ctx.model) {
@@ -269,8 +314,10 @@ export default function setModelExtension(pi: ExtensionAPI) {
           model: ctx.model.id,
           thinkingLevel: pi.getThinkingLevel(),
         };
-        queueSave(nextPreference);
-        await writeQueue;
+        if (!(await queueSave(nextPreference, ctx))) {
+          notifyWriteFailure(ctx, "save");
+          return;
+        }
         ctx.ui.notify(
           `Saved project model: ${nextPreference.provider}/${nextPreference.model} · thinking: ${nextPreference.thinkingLevel}`,
           "info",
@@ -279,16 +326,13 @@ export default function setModelExtension(pi: ExtensionAPI) {
       }
 
       if (action === "clear") {
-        preference = undefined;
-        if (projectTrusted && preferencePath) {
-          writeQueue = writeQueue.then(async () => {
-            try {
-              await unlink(preferencePath);
-            } catch (error: unknown) {
-              if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-            }
-          });
-          await writeQueue;
+        if (!ctx.isProjectTrusted()) {
+          notifyWriteFailure(ctx, "clear");
+          return;
+        }
+        if (!(await queueClear(ctx))) {
+          notifyWriteFailure(ctx, "clear");
+          return;
         }
         ctx.ui.notify("Cleared this folder's model preference.", "info");
         return;

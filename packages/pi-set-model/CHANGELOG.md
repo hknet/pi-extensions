@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.9 - 2026-11-17
+
+### Changed
+
+- Update the development, type-compatibility, and test baseline to Pi SDK 1.5.2; retain the Pi 0.84.4 runtime minimum.
+- Recheck effective project trust when saving or clearing preferences rather than relying on a startup snapshot.
+
+### Fixed
+
+- Explain that Pi's saved `/trust` decision requires restarting Pi before project-local writes are allowed.
+- Report preference save and clear failures instead of claiming the operation succeeded.
+
+### Tests
+
+- Cover trust-state changes after startup and preference write failures.
+
 ## 0.1.8 - 2026-10-20
 
 ### Changed

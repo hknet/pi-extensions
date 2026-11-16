@@ -1,6 +1,6 @@
 # pi-timestamp
 
-Shows timestamps for user input and agent completion timing. Requires Pi 0.84.4 or newer; development and tests use Pi SDK 1.3.0.
+Shows timestamps for user input and agent completion timing. Requires Pi 0.84.4 or newer; development and tests use Pi SDK 1.5.2.
 
 ## What it does
 

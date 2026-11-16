@@ -1,10 +1,10 @@
 # pi-set-model
 
-Remembers Pi's selected model and thinking level for each project folder. Requires Pi 0.84.4 or newer; development and tests use Pi SDK 1.3.0.
+Remembers Pi's selected model and thinking level for each project folder. Requires Pi 0.84.4 or newer; development and tests use Pi SDK 1.5.2.
 
 After selecting a model and thinking level, explicitly save that combination for the current working directory with `/set-model set`. New Pi sessions opened in that directory restore it, rather than retaining the model selected in another project. Later thinking-level changes for the saved model automatically update the preference to match Pi's footer. A later `/model` change does not replace the saved project model unless you run `/set-model set` again.
 
-Preferences are stored in the project at `.pi/set-model.json`; they are never shared with another project. Pi must trust the project before the extension reads or writes this project-local setting.
+Preferences are stored in the project at `.pi/set-model.json`; they are never shared with another project. Pi must trust the project before the extension reads or writes this project-local setting. Pi's `/trust` command saves a decision for future processes; restart Pi before using `/set-model set` if trust was just granted.
 
 ## Install
 

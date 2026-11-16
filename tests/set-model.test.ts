@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import setModelExtension, {
@@ -66,6 +66,148 @@ test("set-model ignores project preferences until the project is trusted", async
     }
     assert.equal(setModelCalls, 0);
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("set-model rechecks effective trust when saving instead of using a startup snapshot", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-set-model-trust-refresh-"));
+  const preferenceFile = join(directory, ".pi", "set-model.json");
+  const handlers = new Map<string, Array<(event: any, ctx: any) => unknown>>();
+  const notifications: string[] = [];
+  let commandHandler: ((args: string, ctx: any) => Promise<void>) | undefined;
+  let trusted = false;
+  let thinkingLevel = "high";
+  const model = { provider: "test-provider", id: "test-model", reasoning: true };
+  const pi = {
+    on(event: string, handler: (event: any, ctx: any) => unknown) {
+      handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+    },
+    registerCommand(_name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) {
+      commandHandler = command.handler;
+    },
+    getThinkingLevel: () => thinkingLevel,
+    setThinkingLevel: (level: string) => { thinkingLevel = level; },
+    setModel: async () => true,
+  } as unknown as ExtensionAPI;
+  setModelExtension(pi);
+
+  const ctx = {
+    cwd: directory,
+    model,
+    isProjectTrusted: () => trusted,
+    modelRegistry: { find: () => model },
+    ui: {
+      addAutocompleteProvider: () => {},
+      notify: (message: string) => notifications.push(message),
+      theme: { fg: (_color: string, message: string) => message },
+    },
+  };
+
+  try {
+    for (const handler of handlers.get("session_start") ?? []) {
+      await handler({ type: "session_start", reason: "startup" }, ctx);
+    }
+    assert.ok(commandHandler);
+
+    await commandHandler("set", ctx);
+    assert.match(notifications.at(-1) ?? "", /\/trust, restart Pi/);
+    assert.equal(await loadPreference(preferenceFile), undefined);
+
+    notifications.length = 0;
+    trusted = true;
+    await commandHandler("set", ctx);
+    assert.deepEqual(await loadPreference(preferenceFile), {
+      provider: "test-provider",
+      model: "test-model",
+      thinkingLevel: "high",
+    });
+    assert.match(notifications.at(-1) ?? "", /^Saved project model:/);
+
+    notifications.length = 0;
+    thinkingLevel = "medium";
+    const thinkingHandler = handlers.get("thinking_level_select")?.[0];
+    assert.ok(thinkingHandler);
+    const originalError = console.error;
+    console.error = () => {};
+    try {
+      const queuedSave = Promise.resolve(thinkingHandler(
+        { type: "thinking_level_select", level: "medium", previousLevel: "high" },
+        ctx,
+      ));
+      trusted = false;
+      await queuedSave;
+    } finally {
+      console.error = originalError;
+    }
+    assert.deepEqual(await loadPreference(preferenceFile), {
+      provider: "test-provider",
+      model: "test-model",
+      thinkingLevel: "high",
+    });
+    assert.match(notifications.at(-1) ?? "", /\/trust, restart Pi/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("set-model restores the prior saved preference when save and clear operations fail", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-set-model-write-failure-"));
+  const preferenceFile = join(directory, ".pi", "set-model.json");
+  const savedPreference = { provider: "test-provider", model: "test-model", thinkingLevel: "high" as const };
+  await savePreference(preferenceFile, savedPreference);
+  const handlers = new Map<string, Array<(event: any, ctx: any) => unknown>>();
+  const notifications: string[] = [];
+  let commandHandler: ((args: string, ctx: any) => Promise<void>) | undefined;
+  const model = { provider: "test-provider", id: "test-model", reasoning: true };
+  const pi = {
+    on(event: string, handler: (event: any, ctx: any) => unknown) {
+      handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+    },
+    registerCommand(_name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) {
+      commandHandler = command.handler;
+    },
+    getThinkingLevel: () => "high",
+    setThinkingLevel() {},
+    setModel: async () => true,
+  } as unknown as ExtensionAPI;
+  setModelExtension(pi);
+
+  const ctx = {
+    cwd: directory,
+    model,
+    isProjectTrusted: () => true,
+    modelRegistry: { find: () => model },
+    ui: {
+      addAutocompleteProvider: () => {},
+      notify: (message: string) => notifications.push(message),
+      theme: { fg: (_color: string, message: string) => message },
+    },
+  };
+  const originalError = console.error;
+  console.error = () => {};
+
+  try {
+    for (const handler of handlers.get("session_start") ?? []) {
+      await handler({ type: "session_start", reason: "startup" }, ctx);
+    }
+    assert.ok(commandHandler);
+
+    await rename(join(directory, ".pi"), join(directory, ".pi.saved"));
+    await writeFile(join(directory, ".pi"), "not a directory");
+    await commandHandler("set", ctx);
+    assert.match(notifications.at(-1) ?? "", /^Could not save project model preference/);
+    assert.doesNotMatch(notifications.join("\n"), /Saved project model:/);
+    await commandHandler("view", ctx);
+    assert.match(notifications.at(-1) ?? "", /Project model: test-provider\/test-model · thinking: high/);
+
+    await commandHandler("clear", ctx);
+    assert.match(notifications.at(-1) ?? "", /^Could not clear project model preference/);
+    await commandHandler("view", ctx);
+    assert.match(notifications.at(-1) ?? "", /Project model: test-provider\/test-model · thinking: high/);
+    assert.deepEqual(await loadPreference(join(directory, ".pi.saved", "set-model.json")), savedPreference);
+  } finally {
+    console.error = originalError;
     await rm(directory, { recursive: true, force: true });
   }
 });

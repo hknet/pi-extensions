@@ -43,7 +43,8 @@
  * call advisor, nudged by the tool's prompt guidelines. The optional deterministic
  * triggers and `/advise` command provide additional ways to request reviewer feedback.
  */
-import { getSupportedThinkingLevels, Type } from "@earendil-works/pi-ai";
+import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import type { Api, Model, ModelThinkingLevel, ProviderHeaders } from "@earendil-works/pi-ai";
 import { complete } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";

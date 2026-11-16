@@ -41,8 +41,8 @@ const copyrightNotice = `${copyrightLine}\nLicensed under the EUPL\n`;
 const sourceNotice = `// ${copyrightLine}\n// SPDX-License-Identifier: EUPL-1.2\n`;
 
 const expectedPeers: Record<(typeof manifests)[number], string[]> = {
-  "package.json": ["@earendil-works/pi-ai", "@earendil-works/pi-coding-agent", "@earendil-works/pi-tui"],
-  "packages/pi-advisor/package.json": ["@earendil-works/pi-ai", "@earendil-works/pi-coding-agent", "@earendil-works/pi-tui"],
+  "package.json": ["@earendil-works/pi-ai", "@earendil-works/pi-coding-agent", "@earendil-works/pi-tui", "typebox"],
+  "packages/pi-advisor/package.json": ["@earendil-works/pi-ai", "@earendil-works/pi-coding-agent", "@earendil-works/pi-tui", "typebox"],
   "packages/pi-thinking-command/package.json": ["@earendil-works/pi-ai", "@earendil-works/pi-coding-agent", "@earendil-works/pi-tui"],
   "packages/pi-timestamp/package.json": ["@earendil-works/pi-coding-agent", "@earendil-works/pi-tui"],
   "packages/pi-set-model/package.json": ["@earendil-works/pi-ai", "@earendil-works/pi-coding-agent", "@earendil-works/pi-tui"],
@@ -61,13 +61,13 @@ test("npm metadata identifies the company author", () => {
   }
 });
 
-test("Pi SDK packages are optional wildcard peers supplied by the host", () => {
+test("Pi SDK and host-provided schema packages are optional wildcard peers", () => {
   for (const path of manifests) {
     const manifest = readManifest(path);
     assert.equal(manifest.engines?.node, ">=22.19.0", `${path} Node engine`);
     assert.deepEqual(Object.keys(manifest.peerDependencies ?? {}).sort(), expectedPeers[path], `${path} peer set`);
     for (const [name, range] of Object.entries(manifest.peerDependencies ?? {})) {
-      assert.match(name, /^@earendil-works\/pi-(?:ai|coding-agent|tui)$/);
+      assert.match(name, /^(?:@earendil-works\/pi-(?:ai|coding-agent|tui)|typebox)$/);
       assert.equal(range, "*", `${path} ${name} peer range`);
       assert.equal(manifest.peerDependenciesMeta?.[name]?.optional, true, `${path} ${name} optional peer`);
     }
@@ -84,6 +84,8 @@ test("Pi SDK development dependencies stay on one release to avoid duplicate typ
   const versions = sdkPackages.map((name) => manifest.devDependencies?.[name]);
   assert.ok(versions.every((version) => version !== undefined));
   assert.equal(new Set(versions).size, 1);
+  assert.ok(versions.every((version) => version === "1.5.2"), "SDK baseline is Pi 1.5.2");
+  assert.equal(manifest.devDependencies?.typebox, "1.3.27", "TypeBox matches Pi SDK 1.5.2");
 });
 
 test("install-script denylist follows the exact transitive package versions", () => {
